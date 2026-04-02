@@ -13,10 +13,11 @@ CREATE SCHEMA IF NOT EXISTS jobs;
 -- ─────────────────────────────────────────
 CREATE TABLE core.legislatures (
     id          SERIAL PRIMARY KEY,
-    number      INTEGER UNIQUE NOT NULL,
+    number      INTEGER NOT NULL,
     start_date  DATE NOT NULL,
     end_date    DATE,
-    chamber     VARCHAR(10) NOT NULL  -- 'camara' | 'senado'
+    chamber     VARCHAR(10) NOT NULL,  -- 'camara' | 'senado'
+    UNIQUE (number, chamber)
 );
 
 -- ─────────────────────────────────────────
