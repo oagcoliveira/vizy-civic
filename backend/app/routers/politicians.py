@@ -71,3 +71,66 @@ def get_politician(politician_id: int, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Politician not found")
     return dict(row._mapping)
+
+
+@router.get("/{politician_id}/stats")
+def get_politician_stats(politician_id: int, db: Session = Depends(get_db)):
+    votes = db.execute(
+        text("SELECT count(*) FROM core.individual_votes WHERE politician_id = :id"),
+        {"id": politician_id}
+    ).scalar()
+    speeches = db.execute(
+        text("SELECT count(*) FROM core.speeches WHERE politician_id = :id"),
+        {"id": politician_id}
+    ).scalar()
+    bills = db.execute(
+        text("SELECT count(*) FROM core.bills WHERE author_politician_id = :id"),
+        {"id": politician_id}
+    ).scalar()
+    return {"votes": votes, "speeches": speeches, "bills": bills}
+
+
+@router.get("/{politician_id}/votes")
+def get_politician_votes(
+    politician_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, le=50),
+    db: Session = Depends(get_db),
+):
+    rows = db.execute(text("""
+        SELECT iv.vote, iv.party_at_time, iv.party_orientation, iv.followed_orientation,
+               v.voted_at, v.result, v.description,
+               b.short_title, b.type, b.number, b.year
+        FROM core.individual_votes iv
+        JOIN core.votacoes v ON v.id = iv.votacao_id
+        LEFT JOIN core.bills b ON b.id = v.bill_id
+        WHERE iv.politician_id = :id
+        ORDER BY v.voted_at DESC NULLS LAST
+        LIMIT :limit OFFSET :offset
+    """), {"id": politician_id, "limit": page_size, "offset": (page - 1) * page_size}).fetchall()
+    total = db.execute(
+        text("SELECT count(*) FROM core.individual_votes WHERE politician_id = :id"),
+        {"id": politician_id}
+    ).scalar()
+    return {"total": total, "page": page, "items": [dict(r._mapping) for r in rows]}
+
+
+@router.get("/{politician_id}/speeches")
+def get_politician_speeches(
+    politician_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, le=50),
+    db: Session = Depends(get_db),
+):
+    rows = db.execute(text("""
+        SELECT id, delivered_at, phase, summary, keywords, full_text_url
+        FROM core.speeches
+        WHERE politician_id = :id
+        ORDER BY delivered_at DESC NULLS LAST
+        LIMIT :limit OFFSET :offset
+    """), {"id": politician_id, "limit": page_size, "offset": (page - 1) * page_size}).fetchall()
+    total = db.execute(
+        text("SELECT count(*) FROM core.speeches WHERE politician_id = :id"),
+        {"id": politician_id}
+    ).scalar()
+    return {"total": total, "page": page, "items": [dict(r._mapping) for r in rows]}
