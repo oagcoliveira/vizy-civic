@@ -19,7 +19,16 @@ const STATES = [
   "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO",
 ];
 
+const PARTIES = [
+  "AVANTE","CIDADANIA","MDB","MISSÃO","NOVO","PCdoB","PDT","PL","PODE",
+  "PP","PRD","PSB","PSD","PSDB","PSOL","PT","PV","REDE","REPUBLICANOS",
+  "SOLIDARIEDADE","UNIÃO",
+];
+
 const PAGE_SIZE = 54;
+
+const SELECT_CLASS =
+  "h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 export default function DeputadosPage() {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -52,39 +61,55 @@ export default function DeputadosPage() {
 
   useEffect(() => { setPage(1); }, [search, stateFilter, partyFilter]);
 
+  const hasFilters = search !== "" || stateFilter !== "" || partyFilter !== "";
+
+  function clearFilters() {
+    setSearch("");
+    setStateFilter("");
+    setPartyFilter("");
+  }
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold mb-1">Deputados Federais</h1>
-        <p className="text-muted-foreground text-sm">{total} deputados em exercício — 57ª Legislatura</p>
+        <p className="text-muted-foreground text-sm">
+          {total.toLocaleString("pt-BR")} deputados em exercício — 57ª Legislatura
+        </p>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <Input
           type="search"
           placeholder="Buscar por nome..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-56"
+          className="w-52"
         />
         <select
           value={stateFilter}
           onChange={(e) => setStateFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className={SELECT_CLASS}
         >
           <option value="">Todos os estados</option>
           {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <Input
-          type="text"
-          placeholder="Partido (ex: PT)"
+        <select
           value={partyFilter}
-          onChange={(e) => setPartyFilter(e.target.value.toUpperCase())}
-          className="w-36"
-        />
+          onChange={(e) => setPartyFilter(e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="">Todos os partidos</option>
+          {PARTIES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Grid */}
@@ -95,7 +120,14 @@ export default function DeputadosPage() {
           ))}
         </div>
       ) : politicians.length === 0 ? (
-        <p className="text-muted-foreground text-center py-20">Nenhum deputado encontrado.</p>
+        <div className="text-center py-20">
+          <p className="text-muted-foreground">Nenhum deputado encontrado.</p>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-2">
+              Limpar filtros
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {politicians.map((p) => (
@@ -104,7 +136,7 @@ export default function DeputadosPage() {
               href={`/politico/${p.id}`}
               className="group flex flex-col items-center bg-card border rounded-lg p-4 hover:shadow-md hover:border-primary/40 transition-all"
             >
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-muted mb-3 ring-2 ring-border group-hover:ring-primary/30 transition-all">
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-muted mb-3 ring-2 ring-border group-hover:ring-primary/30 transition-all flex-shrink-0">
                 {p.photo_url ? (
                   <img src={p.photo_url} alt={p.short_name} className="w-full h-full object-cover" />
                 ) : (
@@ -117,8 +149,8 @@ export default function DeputadosPage() {
                 {p.short_name}
               </p>
               <div className="flex gap-1 flex-wrap justify-center">
-                <Badge variant="secondary">{p.party}</Badge>
-                <Badge variant="outline">{p.state}</Badge>
+                <Badge variant="secondary" className="text-[10px] px-1.5">{p.party}</Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5">{p.state}</Badge>
               </div>
             </Link>
           ))}

@@ -1,3 +1,4 @@
+import json
 import os
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ def log_run(job_name: str, status: str, fetched: int = 0, inserted: int = 0,
                      records_fetched, records_inserted, records_updated, error_message, params)
                 VALUES
                     (:job, now(), now(), :status,
-                     :fetched, :inserted, :updated, :error, :params::jsonb)
+                     :fetched, :inserted, :updated, :error, CAST(:params AS jsonb))
             """),
             {
                 "job": job_name,
@@ -26,7 +27,7 @@ def log_run(job_name: str, status: str, fetched: int = 0, inserted: int = 0,
                 "inserted": inserted,
                 "updated": updated,
                 "error": error,
-                "params": str(params or {}),
+                "params": json.dumps(params or {}),
             },
         )
 

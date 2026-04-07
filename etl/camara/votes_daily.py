@@ -10,7 +10,7 @@ Usage:
 
 import json
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import text
 
@@ -18,26 +18,45 @@ from db import engine, last_successful_run, log_run
 from camara.client import paginate, get
 
 JOB_NAME = "camara_votes_daily"
+CHUNK_DAYS = 30  # smaller chunks = fewer pages per request, less likely to hit timeouts
+
+
+def _date_chunks(since: str, until: str):
+    """Yield (start, end) pairs spanning [since, until] in CHUNK_DAYS windows."""
+    start = date.fromisoformat(since)
+    end = date.fromisoformat(until)
+    while start <= end:
+        chunk_end = min(start + timedelta(days=CHUNK_DAYS - 1), end)
+        yield start.isoformat(), chunk_end.isoformat()
+        start = chunk_end + timedelta(days=1)
 
 
 def run():
-    since = last_successful_run(JOB_NAME) or "2019-01-01"
+    since = last_successful_run(JOB_NAME) or "2023-02-01"  # start of 57th legislature
     today = date.today().isoformat()
     print(f"[{JOB_NAME}] Fetching votações from {since} to {today}")
 
     try:
-        votacoes = paginate("/votacoes", {"dataInicio": since, "dataFim": today, "ordem": "ASC"})
+        # Phase 1: fetch all votações in chunks
+        votacoes = []
+        for chunk_start, chunk_end in _date_chunks(since, today):
+            print(f"[{JOB_NAME}]   chunk {chunk_start} to {chunk_end}", flush=True)
+            chunk_params = {"dataInicio": chunk_start, "dataFim": chunk_end, "ordem": "ASC"}
+            votacoes.extend(paginate("/votacoes", chunk_params))
+
         fetched = len(votacoes)
         inserted = updated = 0
+        print(f"[{JOB_NAME}] {fetched} votações fetched", flush=True)
 
+        # Phase 2: upsert all votações (committed immediately)
         with engine.begin() as conn:
             for v in votacoes:
                 row = {
                     "source": "camara",
                     "external_id": str(v["id"]),
                     "description": v.get("descricao"),
-                    "voted_at": v.get("dataHoraInicio"),
-                    "vote_type": "nominal" if v.get("tipoVotacao") == "Nominal" else v.get("tipoVotacao"),
+                    "voted_at": v.get("dataHoraRegistro"),  # correct field name from API
+                    "vote_type": None,  # set to 'nominal' later if individual votes exist
                     "result": v.get("aprovacao"),
                     "session_label": v.get("siglaOrgao"),
                 }
@@ -47,6 +66,8 @@ def run():
                         VALUES (:source, :external_id, :description, :voted_at, :vote_type, :result, :session_label)
                         ON CONFLICT (source, external_id) DO UPDATE
                             SET description = EXCLUDED.description,
+                                voted_at = EXCLUDED.voted_at,
+                                vote_type = EXCLUDED.vote_type,
                                 result = EXCLUDED.result
                         RETURNING (xmax = 0) AS was_inserted
                     """),
@@ -58,9 +79,14 @@ def run():
                 else:
                     updated += 1
 
-                # Fetch individual votes for nominal votações
-                if v.get("tipoVotacao") == "Nominal":
-                    _upsert_individual_votes(conn, v["id"])
+        # Phase 3: individual votes — only plenário votações have nominal votes
+        plen_ids = [str(v["id"]) for v in votacoes if v.get("siglaOrgao") == "PLEN"]
+        print(f"[{JOB_NAME}] Fetching individual votes for {len(plen_ids)} plenário votações...", flush=True)
+        for i, vid in enumerate(plen_ids, 1):
+            if i % 50 == 0 or i == 1:
+                print(f"[{JOB_NAME}]   individual votes: {i}/{len(plen_ids)}", flush=True)
+            with engine.begin() as conn:
+                _upsert_individual_votes(conn, vid)
 
         log_run(JOB_NAME, "success", fetched, inserted, updated, params={"since": since})
         print(f"[{JOB_NAME}] Done — {fetched} fetched, {inserted} inserted, {updated} updated")
@@ -72,11 +98,26 @@ def run():
 
 
 def _upsert_individual_votes(conn, votacao_external_id: str):
-    votos = get(f"/votacoes/{votacao_external_id}/votos").get("dados", [])
-    orientacoes = {
-        o["siglaPartidoLider"]: o["orientacao"]
-        for o in get(f"/votacoes/{votacao_external_id}/orientacoes").get("dados", [])
-    }
+    try:
+        votos = get(f"/votacoes/{votacao_external_id}/votos").get("dados", [])
+    except Exception:
+        votos = []  # 404 or other error — treat as no individual vote data
+    if not votos:
+        # Mark as checked so reruns skip it
+        conn.execute(
+            text("UPDATE core.votacoes SET vote_type = 'none' WHERE source = 'camara' AND external_id = :eid AND vote_type IS NULL"),
+            {"eid": str(votacao_external_id)},
+        )
+        return
+
+    try:
+        orientacoes = {
+            o.get("siglaPartidoLider", ""): o.get("orientacao", "")
+            for o in get(f"/votacoes/{votacao_external_id}/orientacoes").get("dados", [])
+            if o.get("siglaPartidoLider")
+        }
+    except Exception:
+        orientacoes = {}  # no party orientations for this vote
 
     votacao_id_row = conn.execute(
         text("SELECT id FROM core.votacoes WHERE source = 'camara' AND external_id = :eid"),
@@ -85,6 +126,12 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
     if not votacao_id_row:
         return
     votacao_id = votacao_id_row[0]
+
+    # Mark as nominal now that we confirmed individual votes exist
+    conn.execute(
+        text("UPDATE core.votacoes SET vote_type = 'nominal' WHERE id = :id"),
+        {"id": votacao_id},
+    )
 
     for voto in votos:
         dep_external_id = voto.get("deputado_", {}).get("id")
