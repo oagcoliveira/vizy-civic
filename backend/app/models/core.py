@@ -90,7 +90,7 @@ class Bill(Base):
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     full_text_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     author_politician_id: Mapped[Optional[int]] = mapped_column(ForeignKey("core.politicians.id"), nullable=True)
-    author_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    author_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     policy_area: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     policy_tags: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text), nullable=True)
