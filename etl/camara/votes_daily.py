@@ -200,7 +200,9 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
 
         party = voto.get("deputado_", {}).get("siglaPartido", "")
         orientation = orientacoes.get(party)
-        vote_value = voto.get("tipoVoto", "")
+        vote_value = voto.get("tipoVoto") or ""
+        if not vote_value:
+            continue  # skip records with no vote value
         followed = (vote_value == orientation) if orientation else None
 
         conn.execute(
@@ -212,6 +214,7 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
                     SET vote = EXCLUDED.vote,
                         party_orientation = EXCLUDED.party_orientation,
                         followed_orientation = EXCLUDED.followed_orientation
+                    WHERE individual_votes.vote = ''
             """),
             {
                 "vid": votacao_id,
