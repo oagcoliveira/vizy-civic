@@ -10,6 +10,7 @@ router = APIRouter()
 @router.get("/")
 def list_bills(
     source: str | None = Query(None),
+    type: str | None = Query(None),
     status: str | None = Query(None),
     policy_area: str | None = Query(None),
     year: int | None = Query(None),
@@ -24,6 +25,9 @@ def list_bills(
     if source:
         where.append("source = :source")
         params["source"] = source
+    if type:
+        where.append("type = :type")
+        params["type"] = type
     if status:
         where.append("status = :status")
         params["status"] = status

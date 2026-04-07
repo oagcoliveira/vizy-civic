@@ -35,7 +35,8 @@ def get_feed(
                v.voted_at AS occurred_at, b.short_title AS title, iv.vote AS detail
         FROM core.individual_votes iv
         JOIN core.votacoes v ON v.id = iv.votacao_id
-        LEFT JOIN core.bills b ON b.id = v.bill_id
+        LEFT JOIN core.votacao_bills vb ON vb.votacao_id = v.id AND vb.is_primary = TRUE
+        LEFT JOIN core.bills b ON b.id = vb.bill_id
         WHERE iv.politician_id = ANY(:pids)
 
         UNION ALL

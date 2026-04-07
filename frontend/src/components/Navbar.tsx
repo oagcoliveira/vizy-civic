@@ -11,6 +11,7 @@ export function Navbar() {
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <Link href="/deputados" className="hover:text-foreground transition-colors">Deputados</Link>
             <Link href="/votacoes" className="hover:text-foreground transition-colors">Votações</Link>
+            <Link href="/proposicoes" className="hover:text-foreground transition-colors">Proposições</Link>
             <Link href="/doacoes" className="hover:text-foreground transition-colors">Doações</Link>
             <Link href="/busca" className="hover:text-foreground transition-colors">Busca</Link>
           </nav>
