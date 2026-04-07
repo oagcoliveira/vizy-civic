@@ -81,10 +81,11 @@ class Bill(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source: Mapped[str] = mapped_column(String(10))
     external_id: Mapped[int] = mapped_column(Integer)
-    type: Mapped[str] = mapped_column(String(10))  # PL, PEC, MPV, PDL
-    number: Mapped[int] = mapped_column(Integer)
-    year: Mapped[int] = mapped_column(Integer)
-    title: Mapped[str] = mapped_column(Text)
+    type: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # PL, PEC, MPV, PDL
+    number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ementa: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     short_title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     full_text_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -109,7 +110,6 @@ class Votacao(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source: Mapped[str] = mapped_column(String(10))
     external_id: Mapped[str] = mapped_column(String(100))
-    bill_id: Mapped[Optional[int]] = mapped_column(ForeignKey("core.bills.id"), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     voted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     vote_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

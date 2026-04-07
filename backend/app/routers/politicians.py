@@ -99,11 +99,13 @@ def get_politician_votes(
 ):
     rows = db.execute(text("""
         SELECT iv.vote, iv.party_at_time, iv.party_orientation, iv.followed_orientation,
+               v.id AS votacao_id, v.external_id AS votacao_external_id,
                v.voted_at, v.result, v.description,
-               b.short_title, b.type, b.number, b.year
+               b.id AS bill_id, b.short_title, b.ementa, b.type, b.number, b.year
         FROM core.individual_votes iv
         JOIN core.votacoes v ON v.id = iv.votacao_id
-        LEFT JOIN core.bills b ON b.id = v.bill_id
+        LEFT JOIN core.votacao_bills vb ON vb.votacao_id = v.id AND vb.is_primary = TRUE
+        LEFT JOIN core.bills b ON b.id = vb.bill_id
         WHERE iv.politician_id = :id
         ORDER BY v.voted_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset

@@ -97,6 +97,59 @@ def run():
         raise
 
 
+def _upsert_proposicoes(conn, votacao_id: int, votacao_external_id: str):
+    """Fetch votação detail and upsert linked bills into core.bills / core.votacao_bills."""
+    try:
+        detail = get(f"/votacoes/{votacao_external_id}").get("dados", {})
+    except Exception:
+        return
+
+    # Also fix voted_at from detail if available
+    voted_at = detail.get("dataHoraRegistro")
+    if voted_at:
+        conn.execute(
+            text("UPDATE core.votacoes SET voted_at = :ts WHERE id = :id AND voted_at IS NULL"),
+            {"ts": voted_at, "id": votacao_id},
+        )
+
+    props = detail.get("proposicoesAfetadas", [])
+    for i, p in enumerate(props):
+        ext_id = p.get("id")
+        if not ext_id:
+            continue
+        tipo = p.get("siglaTipo", "")
+        numero = p.get("numero")
+        ano = p.get("ano")
+        title = f"{tipo} {numero}/{ano}" if tipo and numero and ano else None
+        row = conn.execute(
+            text("""
+                INSERT INTO core.bills (source, external_id, type, number, year, title, ementa, full_text_url)
+                VALUES ('camara', :eid, :type, :number, :year, :title, :ementa, :uri)
+                ON CONFLICT (source, external_id) DO UPDATE
+                    SET ementa = EXCLUDED.ementa
+                RETURNING id
+            """),
+            {
+                "eid": ext_id,
+                "type": tipo or None,
+                "number": numero,
+                "year": ano,
+                "title": title,
+                "ementa": p.get("ementa"),
+                "uri": p.get("uri"),
+            },
+        ).fetchone()
+        if row:
+            conn.execute(
+                text("""
+                    INSERT INTO core.votacao_bills (votacao_id, bill_id, is_primary)
+                    VALUES (:vid, :bid, :primary)
+                    ON CONFLICT (votacao_id, bill_id) DO NOTHING
+                """),
+                {"vid": votacao_id, "bid": row[0], "primary": i == 0},
+            )
+
+
 def _upsert_individual_votes(conn, votacao_external_id: str):
     try:
         votos = get(f"/votacoes/{votacao_external_id}/votos").get("dados", [])
@@ -127,11 +180,12 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
         return
     votacao_id = votacao_id_row[0]
 
-    # Mark as nominal now that we confirmed individual votes exist
+    # Mark as nominal and fetch linked proposições
     conn.execute(
         text("UPDATE core.votacoes SET vote_type = 'nominal' WHERE id = :id"),
         {"id": votacao_id},
     )
+    _upsert_proposicoes(conn, votacao_id, votacao_external_id)
 
     for voto in votos:
         dep_external_id = voto.get("deputado_", {}).get("id")
