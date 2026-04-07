@@ -200,7 +200,7 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
 
         party = voto.get("deputado_", {}).get("siglaPartido", "")
         orientation = orientacoes.get(party)
-        vote_value = voto.get("voto", "")
+        vote_value = voto.get("tipoVoto", "")
         followed = (vote_value == orientation) if orientation else None
 
         conn.execute(
@@ -208,7 +208,10 @@ def _upsert_individual_votes(conn, votacao_external_id: str):
                 INSERT INTO core.individual_votes
                     (votacao_id, politician_id, vote, party_at_time, party_orientation, followed_orientation)
                 VALUES (:vid, :pid, :vote, :party, :orientation, :followed)
-                ON CONFLICT (votacao_id, politician_id) DO NOTHING
+                ON CONFLICT (votacao_id, politician_id) DO UPDATE
+                    SET vote = EXCLUDED.vote,
+                        party_orientation = EXCLUDED.party_orientation,
+                        followed_orientation = EXCLUDED.followed_orientation
             """),
             {
                 "vid": votacao_id,
