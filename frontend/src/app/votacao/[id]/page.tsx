@@ -5,9 +5,10 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 600;
 
 type Bill = {
   id: number;
@@ -27,6 +28,8 @@ type VotacaoDetail = {
   description: string | null;
   voted_at: string | null;
   result: string | null;
+  vote_type: string | null;
+  session_label: string | null;
   bill_id: number | null;
   bill_short_title: string | null;
   bill_ementa: string | null;
@@ -60,14 +63,6 @@ function voteBadge(vote: string) {
   return <Badge className={map[vote] ?? "bg-muted"}>{vote}</Badge>;
 }
 
-function resultBadge(result: string | null) {
-  if (result === "1" || result?.toLowerCase().includes("aprovad"))
-    return <Badge className="bg-green-100 text-green-800 border-green-200 text-base px-3 py-1">Aprovada</Badge>;
-  if (result === "0" || result?.toLowerCase().includes("rejeitad"))
-    return <Badge className="bg-red-100 text-red-800 border-red-200 text-base px-3 py-1">Rejeitada</Badge>;
-  return <Badge variant="secondary">{result ?? "—"}</Badge>;
-}
-
 function formatDate(ts: string | null) {
   if (!ts) return "—";
   return new Date(ts).toLocaleDateString("pt-BR", {
@@ -75,15 +70,25 @@ function formatDate(ts: string | null) {
   });
 }
 
-const VOTE_FILTERS = ["Todos", "Sim", "Não", "Abstenção", "Obstrução", "Artigo 17"];
+// "Todos" is the sentinel value for "no filter" — do not translate the value itself
+const VOTE_FILTER_VALUES = ["Todos", "Sim", "Não", "Abstenção", "Obstrução", "Artigo 17"];
 
 export default function VotacaoPage({ params }: { params: { id: string } }) {
+  const { t } = useLanguage();
   const [votacao, setVotacao] = useState<VotacaoDetail | null>(null);
   const [individualVotes, setIndividualVotes] = useState<IndividualVote[]>([]);
   const [totalVotes, setTotalVotes] = useState(0);
   const [search, setSearch] = useState("");
   const [voteFilter, setVoteFilter] = useState("Todos");
   const [loading, setLoading] = useState(true);
+
+  function resultBadge(result: string | null) {
+    if (result === "1" || result?.toLowerCase().includes("aprovad"))
+      return <Badge className="bg-green-100 text-green-800 border-green-200 text-base px-3 py-1">{t("votes.badge_approved")}</Badge>;
+    if (result === "0" || result?.toLowerCase().includes("rejeitad"))
+      return <Badge className="bg-red-100 text-red-800 border-red-200 text-base px-3 py-1">{t("votes.badge_rejected")}</Badge>;
+    return <Badge variant="secondary">{result ?? "—"}</Badge>;
+  }
 
   useEffect(() => {
     fetch(`${API}/votes/${params.id}`)
@@ -118,8 +123,8 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
   if (!votacao) {
     return (
       <main className="max-w-5xl mx-auto px-4 py-8">
-        <p className="text-muted-foreground">Votação não encontrada.</p>
-        <Link href="/votacoes" className="text-primary text-sm mt-2 block">← Voltar à base de votações</Link>
+        <p className="text-muted-foreground">{t("vote.not_found")}</p>
+        <Link href="/votacoes" className="text-primary text-sm mt-2 block">{t("vote.back_long")}</Link>
       </main>
     );
   }
@@ -139,7 +144,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
       <Link href="/votacoes" className="text-sm text-muted-foreground hover:text-primary mb-4 block">
-        ← Base de Votações
+        {t("vote.back")}
       </Link>
 
       {/* Header */}
@@ -147,10 +152,24 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
         <div className="flex items-start gap-3 mb-3">
           {resultBadge(votacao.result)}
           <span className="text-sm text-muted-foreground mt-1">{formatDate(votacao.voted_at)}</span>
+          {votacao.session_label && (
+            <span className="text-sm text-muted-foreground mt-1">· {votacao.session_label}</span>
+          )}
         </div>
         <h1 className="text-2xl font-bold mb-2">{billLabel}</h1>
         {votacao.description && votacao.description !== billLabel && (
           <p className="text-muted-foreground text-sm">{votacao.description}</p>
+        )}
+        {/* Show full ementa for the primary bill if different from short_title */}
+        {primaryBill?.ementa && primaryBill.ementa !== billLabel && (
+          <p className="text-muted-foreground text-sm mt-2 italic">{primaryBill.ementa}</p>
+        )}
+        {/* Symbolic vote banner */}
+        {votacao.vote_type === "symbolic" && (
+          <div className="mt-3 flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 flex-shrink-0">{t("vote.symbolic_badge")}</Badge>
+            <span>{t("vote.symbolic_note")}</span>
+          </div>
         )}
       </div>
 
@@ -171,11 +190,53 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
+      {/* Party breakdown */}
+      {individualVotes.length > 0 && (() => {
+        const partyMap: Record<string, { sim: number; nao: number; outros: number }> = {};
+        individualVotes.forEach((iv) => {
+          const p = iv.party_at_time ?? "—";
+          if (!partyMap[p]) partyMap[p] = { sim: 0, nao: 0, outros: 0 };
+          if (iv.vote === "Sim") partyMap[p].sim++;
+          else if (iv.vote === "Não") partyMap[p].nao++;
+          else partyMap[p].outros++;
+        });
+        const parties = Object.entries(partyMap).sort((a, b) => (b[1].sim + b[1].nao + b[1].outros) - (a[1].sim + a[1].nao + a[1].outros));
+        return (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              {t("vote.party_breakdown")}
+            </h2>
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">{t("vote.col_party")}</th>
+                    <th className="text-right px-4 py-2 font-medium text-green-700 w-20">Sim</th>
+                    <th className="text-right px-4 py-2 font-medium text-red-700 w-20">Não</th>
+                    <th className="text-right px-4 py-2 font-medium text-muted-foreground w-20">{t("vote.col_others")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {parties.map(([party, counts]) => (
+                    <tr key={party} className="hover:bg-muted/20">
+                      <td className="px-4 py-2 font-medium">{party}</td>
+                      <td className="px-4 py-2 text-right text-green-700">{counts.sim || "—"}</td>
+                      <td className="px-4 py-2 text-right text-red-700">{counts.nao || "—"}</td>
+                      <td className="px-4 py-2 text-right text-muted-foreground">{counts.outros || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Linked bills */}
       {votacao.bills.length > 0 && (
         <div className="mb-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Proposições relacionadas
+            {t("vote.related_bills")}
           </h2>
           <div className="space-y-2">
             {votacao.bills.map((b) => (
@@ -187,7 +248,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     {b.type && <Badge variant="outline" className="text-xs">{b.type} {b.number}/{b.year}</Badge>}
-                    {b.is_primary && <Badge variant="secondary" className="text-xs">Principal</Badge>}
+                    {b.is_primary && <Badge variant="secondary" className="text-xs">{t("vote.primary")}</Badge>}
                   </div>
                   <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
                     {b.short_title ?? b.ementa ?? b.title ?? "—"}
@@ -203,20 +264,20 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
       {totalVotes > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Votos individuais ({totalVotes})
+            {t("vote.individual")} ({totalVotes})
           </h2>
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Input
               type="search"
-              placeholder="Buscar parlamentar..."
+              placeholder={t("vote.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-48 h-8 text-sm"
             />
             <div className="flex gap-1">
-              {VOTE_FILTERS.map((f) => (
+              {VOTE_FILTER_VALUES.map((f) => (
                 <Button
                   key={f}
                   variant={voteFilter === f ? "default" : "outline"}
@@ -224,7 +285,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
                   className="h-8 text-xs"
                   onClick={() => setVoteFilter(f)}
                 >
-                  {f}
+                  {f === "Todos" ? t("vote.filter_all") : f}
                 </Button>
               ))}
             </div>
@@ -234,11 +295,11 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Parlamentar</th>
-                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-16">UF</th>
-                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-20">Partido</th>
-                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Voto</th>
-                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-28">Orientação</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">{t("vote.col_politician")}</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-16">{t("vote.col_state")}</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-20">{t("vote.col_party")}</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">{t("vote.col_vote")}</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground w-28">{t("vote.col_orientation")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -251,7 +312,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
                         )}
                         <span className="font-medium">{iv.short_name ?? iv.name}</span>
                         {iv.followed_orientation === false && (
-                          <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300 ml-1">Divergiu</Badge>
+                          <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300 ml-1">{t("vote.diverged")}</Badge>
                         )}
                       </Link>
                     </td>
@@ -265,7 +326,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
             </table>
           </div>
           {filtered.length === 0 && (
-            <p className="text-center py-8 text-muted-foreground text-sm">Nenhum resultado encontrado.</p>
+            <p className="text-center py-8 text-muted-foreground text-sm">{t("vote.empty")}</p>
           )}
         </div>
       )}

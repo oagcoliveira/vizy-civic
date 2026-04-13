@@ -1,28 +1,29 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.auth import PoliticianFollow
+from app.models.auth import PoliticianFollow, User
+from app.routers.auth import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/")
 def get_feed(
-    user_id: int = Query(...),
     event_type: str | None = Query(None, description="vote | speech | bill"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, le=50),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Returns reverse-chronological feed events for politicians followed by the user.
-    Each item is a union of votes, speeches, and bill events.
+    Returns reverse-chronological feed events for politicians followed by the authenticated user.
+    Each item is a union of votes and speeches.
     """
     followed = (
         db.query(PoliticianFollow.politician_id)
-        .filter(PoliticianFollow.user_id == user_id)
+        .filter(PoliticianFollow.user_id == current_user.id)
         .all()
     )
     politician_ids = [f.politician_id for f in followed]

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
@@ -27,16 +28,6 @@ type Votacao = {
   bill_year: number | null;
 };
 
-function resultBadge(result: string | null) {
-  if (result === "1" || result?.toLowerCase().includes("aprovad")) {
-    return <Badge className="bg-green-100 text-green-800 border-green-200">Aprovada</Badge>;
-  }
-  if (result === "0" || result?.toLowerCase().includes("rejeitad")) {
-    return <Badge className="bg-red-100 text-red-800 border-red-200">Rejeitada</Badge>;
-  }
-  return <Badge variant="secondary">{result ?? "—"}</Badge>;
-}
-
 function billLabel(v: Votacao) {
   if (v.bill_short_title) return v.bill_short_title;
   if (v.bill_title) return v.bill_title;
@@ -51,11 +42,22 @@ function formatDate(ts: string | null) {
 }
 
 export default function VotacoesPage() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<Votacao[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [resultFilter, setResultFilter] = useState("");
   const [loading, setLoading] = useState(true);
+
+  function resultBadge(result: string | null) {
+    if (result === "1" || result?.toLowerCase().includes("aprovad")) {
+      return <Badge className="bg-green-100 text-green-800 border-green-200">{t("votes.badge_approved")}</Badge>;
+    }
+    if (result === "0" || result?.toLowerCase().includes("rejeitad")) {
+      return <Badge className="bg-red-100 text-red-800 border-red-200">{t("votes.badge_rejected")}</Badge>;
+    }
+    return <Badge variant="secondary">{result ?? "—"}</Badge>;
+  }
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -83,9 +85,9 @@ export default function VotacoesPage() {
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">Base de Votações</h1>
+        <h1 className="text-2xl font-bold mb-1">{t("votes.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          {total.toLocaleString("pt-BR")} votações nominais registradas — Câmara dos Deputados
+          {total.toLocaleString("pt-BR")} {t("votes.subtitle")}
         </p>
       </div>
 
@@ -96,13 +98,13 @@ export default function VotacoesPage() {
           onChange={(e) => setResultFilter(e.target.value)}
           className={SELECT_CLASS}
         >
-          <option value="">Todos os resultados</option>
-          <option value="1">Aprovadas</option>
-          <option value="0">Rejeitadas</option>
+          <option value="">{t("votes.all_results")}</option>
+          <option value="1">{t("votes.approved")}</option>
+          <option value="0">{t("votes.rejected")}</option>
         </select>
         {resultFilter && (
           <Button variant="ghost" size="sm" onClick={() => setResultFilter("")} className="text-muted-foreground">
-            Limpar filtros
+            {t("votes.clear")}
           </Button>
         )}
       </div>
@@ -115,15 +117,15 @@ export default function VotacoesPage() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">Nenhuma votação encontrada.</div>
+        <div className="text-center py-20 text-muted-foreground">{t("votes.empty")}</div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Data</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Proposição</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">Resultado</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("votes.col_date")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("votes.col_bill")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">{t("votes.col_result")}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -154,19 +156,19 @@ export default function VotacoesPage() {
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-4 mt-8">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-            Anterior
+            {t("shared.prev")}
           </Button>
           <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
+            {t("shared.page_of", { page, total: totalPages })}
           </span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            Próxima
+            {t("shared.next")}
           </Button>
         </div>
       )}
 
       <p className="text-xs text-muted-foreground mt-6 text-center">
-        Apenas votações nominais são registradas individualmente. Votações simbólicas não têm registro por parlamentar.
+        {t("votes.disclaimer")}
       </p>
     </main>
   );

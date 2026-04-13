@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -29,6 +31,16 @@ type Bill = {
   author_party: string | null;
 };
 
+type LegislativeEvent = {
+  id: number;
+  sequence: number;
+  event_date: string | null;
+  stage: string | null;
+  description: string | null;
+  summary: string | null;
+  venue: string | null;
+};
+
 type VotacaoLink = {
   id: number;
   description: string | null;
@@ -46,23 +58,28 @@ function statusColor(status: string | null) {
   return "secondary";
 }
 
-function resultBadge(result: string | null) {
-  if (result === "1" || result?.toLowerCase().includes("aprovad"))
-    return <Badge className="bg-green-100 text-green-800 border-green-200">Aprovada</Badge>;
-  if (result === "0" || result?.toLowerCase().includes("rejeitad"))
-    return <Badge className="bg-red-100 text-red-800 border-red-200">Rejeitada</Badge>;
-  return <Badge variant="secondary">{result ?? "—"}</Badge>;
-}
-
 function formatDate(ts: string | null) {
   if (!ts) return "—";
   return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export default function BillPage({ params }: { params: { id: string } }) {
+  const { t } = useLanguage();
+  const { token } = useAuth();
   const [bill, setBill] = useState<Bill | null>(null);
   const [votacoes, setVotacoes] = useState<VotacaoLink[]>([]);
+  const [events, setEvents] = useState<LegislativeEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tracking, setTracking] = useState<boolean | null>(null);
+  const [trackLoading, setTrackLoading] = useState(false);
+
+  function resultBadge(result: string | null) {
+    if (result === "1" || result?.toLowerCase().includes("aprovad"))
+      return <Badge className="bg-green-100 text-green-800 border-green-200">{t("votes.badge_approved")}</Badge>;
+    if (result === "0" || result?.toLowerCase().includes("rejeitad"))
+      return <Badge className="bg-red-100 text-red-800 border-red-200">{t("votes.badge_rejected")}</Badge>;
+    return <Badge variant="secondary">{result ?? "—"}</Badge>;
+  }
 
   useEffect(() => {
     fetch(`${API}/bills/${params.id}`)
@@ -72,7 +89,38 @@ export default function BillPage({ params }: { params: { id: string } }) {
     fetch(`${API}/bills/${params.id}/votacoes?page_size=20`)
       .then((r) => r.json())
       .then((data) => setVotacoes(data.items ?? []));
+
+    fetch(`${API}/bills/${params.id}/events`)
+      .then((r) => r.json())
+      .then((data) => setEvents(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, [params.id]);
+
+  useEffect(() => {
+    if (!token) { setTracking(null); return; }
+    fetch(`${API}/bills/${params.id}/track`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTracking(d.tracking); })
+      .catch(() => {});
+  }, [params.id, token]);
+
+  async function toggleTrack() {
+    if (!token) { window.location.href = "/login"; return; }
+    setTrackLoading(true);
+    try {
+      const method = tracking ? "DELETE" : "POST";
+      const r = await fetch(`${API}/bills/${params.id}/track`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setTracking(data.tracking);
+      }
+    } finally {
+      setTrackLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -90,20 +138,20 @@ export default function BillPage({ params }: { params: { id: string } }) {
   if (!bill) {
     return (
       <main className="max-w-4xl mx-auto px-4 py-8">
-        <p className="text-muted-foreground">Proposição não encontrada.</p>
-        <Link href="/votacoes" className="text-primary text-sm mt-2 block">← Voltar</Link>
+        <p className="text-muted-foreground">{t("bill.not_found")}</p>
+        <Link href="/votacoes" className="text-primary text-sm mt-2 block">{t("bill.back_short")}</Link>
       </main>
     );
   }
 
-  const headline = bill.short_title ?? bill.ementa ?? bill.title ?? "Sem título";
+  const headline = bill.short_title ?? bill.ementa ?? bill.title ?? t("bills.no_title");
   const body = bill.summary ?? bill.ementa;
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <Link href="/votacoes" className="text-sm text-muted-foreground hover:text-primary mb-4 block">
-        ← Base de Votações
+        {t("bill.back")}
       </Link>
 
       {/* Header */}
@@ -122,6 +170,17 @@ export default function BillPage({ params }: { params: { id: string } }) {
           {bill.policy_area && (
             <Badge variant="secondary" className="text-xs">{bill.policy_area}</Badge>
           )}
+          <button
+            onClick={toggleTrack}
+            disabled={trackLoading}
+            className={`ml-auto text-sm font-medium px-3 py-1 rounded-md border transition-colors disabled:opacity-60 ${
+              tracking
+                ? "bg-primary text-primary-foreground border-primary"
+                : "text-muted-foreground hover:text-foreground border-border"
+            }`}
+          >
+            {tracking ? t("bill.tracking") : t("bill.track")}
+          </button>
         </div>
         <h1 className="text-2xl font-bold leading-snug mb-2">{headline}</h1>
         {bill.policy_tags && bill.policy_tags.length > 0 && (
@@ -140,7 +199,7 @@ export default function BillPage({ params }: { params: { id: string } }) {
             <img src={bill.author_photo} alt={bill.author_name ?? ""} className="w-10 h-10 rounded-full object-cover" />
           )}
           <div>
-            <p className="text-xs text-muted-foreground">Autor</p>
+            <p className="text-xs text-muted-foreground">{t("bill.author")}</p>
             {bill.author_politician_id ? (
               <Link href={`/politico/${bill.author_politician_id}`} className="font-medium hover:text-primary transition-colors">
                 {bill.author_name}
@@ -155,11 +214,11 @@ export default function BillPage({ params }: { params: { id: string } }) {
 
       {/* O que é? */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">O que é?</h2>
+        <h2 className="text-lg font-semibold mb-3">{t("bill.what_is")}</h2>
         {body ? (
           <p className="text-muted-foreground leading-relaxed">{body}</p>
         ) : (
-          <p className="text-muted-foreground italic">Resumo não disponível.</p>
+          <p className="text-muted-foreground italic">{t("bill.no_summary")}</p>
         )}
         {bill.full_text_url && (
           <a
@@ -168,12 +227,12 @@ export default function BillPage({ params }: { params: { id: string } }) {
             rel="noopener noreferrer"
             className="text-primary text-sm hover:underline mt-3 block"
           >
-            Ler texto integral na Câmara dos Deputados →
+            {t("bill.read_full")}
           </a>
         )}
         {!bill.summary && bill.ementa && (
           <p className="text-xs text-muted-foreground mt-3 italic">
-            Resumo simplificado em breve — exibindo ementa oficial.
+            {t("bill.summary_soon")}
           </p>
         )}
       </section>
@@ -181,7 +240,7 @@ export default function BillPage({ params }: { params: { id: string } }) {
       {/* Votações */}
       {votacoes.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Votações</h2>
+          <h2 className="text-lg font-semibold mb-3">{t("bill.votes_section")}</h2>
           <div className="space-y-2">
             {votacoes.map((v) => (
               <Link
@@ -202,12 +261,41 @@ export default function BillPage({ params }: { params: { id: string } }) {
         </section>
       )}
 
-      {/* Tramitação placeholder */}
+      {/* Tramitação */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">Tramitação</h2>
-        <p className="text-muted-foreground text-sm italic">
-          Histórico legislativo em breve.
-        </p>
+        <h2 className="text-lg font-semibold mb-3">{t("bill.trail_section")}</h2>
+        {events.length === 0 ? (
+          <p className="text-muted-foreground text-sm italic">{t("bill.trail_soon")}</p>
+        ) : (
+          <div className="relative">
+            {/* Vertical line */}
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+            <div className="space-y-4">
+              {events.slice().reverse().map((ev) => (
+                <div key={ev.id} className="relative pl-10">
+                  {/* Dot */}
+                  <div className="absolute left-2 top-1.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        {ev.summary ?? ev.stage ?? "—"}
+                      </p>
+                      {ev.description && ev.description !== ev.stage && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{ev.description}</p>
+                      )}
+                      {ev.venue && (
+                        <span className="text-xs text-muted-foreground">{ev.venue}</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {ev.event_date ? formatDate(ev.event_date) : "—"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

@@ -51,12 +51,14 @@ def run():
         # Phase 2: upsert all votações (committed immediately)
         with engine.begin() as conn:
             for v in votacoes:
+                tipo = v.get("tipoVotacao") or ""
+                vote_type = "symbolic" if "simbólic" in tipo.lower() else None
                 row = {
                     "source": "camara",
                     "external_id": str(v["id"]),
                     "description": v.get("descricao"),
                     "voted_at": v.get("dataHoraRegistro"),  # correct field name from API
-                    "vote_type": None,  # set to 'nominal' later if individual votes exist
+                    "vote_type": vote_type,  # 'symbolic' if known; set to 'nominal'/'none' later
                     "result": v.get("aprovacao"),
                     "session_label": v.get("siglaOrgao"),
                 }
@@ -67,7 +69,7 @@ def run():
                         ON CONFLICT (source, external_id) DO UPDATE
                             SET description = EXCLUDED.description,
                                 voted_at = EXCLUDED.voted_at,
-                                vote_type = EXCLUDED.vote_type,
+                                vote_type = COALESCE(EXCLUDED.vote_type, core.votacoes.vote_type),
                                 result = EXCLUDED.result
                         RETURNING (xmax = 0) AS was_inserted
                     """),
@@ -79,8 +81,12 @@ def run():
                 else:
                     updated += 1
 
-        # Phase 3: individual votes — only plenário votações have nominal votes
-        plen_ids = [str(v["id"]) for v in votacoes if v.get("siglaOrgao") == "PLEN"]
+        # Phase 3: individual votes — only plenário non-symbolic votações have nominal votes
+        plen_ids = [
+            str(v["id"]) for v in votacoes
+            if v.get("siglaOrgao") == "PLEN"
+            and "simbólic" not in (v.get("tipoVotacao") or "").lower()
+        ]
         print(f"[{JOB_NAME}] Fetching individual votes for {len(plen_ids)} plenário votações...", flush=True)
         for i, vid in enumerate(plen_ids, 1):
             if i % 50 == 0 or i == 1:

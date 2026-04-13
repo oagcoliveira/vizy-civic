@@ -5,11 +5,12 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models.auth import User
+from app.models.auth import BillTrack, PoliticianFollow, User
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -75,3 +76,30 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)):
     return {"id": current_user.id, "email": current_user.email, "name": current_user.name}
+
+
+@router.get("/me/follows")
+def my_follows(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return the list of politician IDs followed by the current user."""
+    rows = db.execute(text("""
+        SELECT pf.politician_id, p.short_name, p.state, pa.acronym AS party, p.photo_url
+        FROM auth.politician_follows pf
+        JOIN core.politicians p ON p.id = pf.politician_id
+        LEFT JOIN core.parties pa ON pa.id = p.party_id
+        WHERE pf.user_id = :uid
+        ORDER BY p.short_name
+    """), {"uid": current_user.id}).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
+@router.get("/me/tracks")
+def my_tracks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return the list of bill IDs tracked by the current user."""
+    rows = db.execute(text("""
+        SELECT bt.bill_id, b.type, b.number, b.year, b.short_title, b.status
+        FROM auth.bill_tracks bt
+        JOIN core.bills b ON b.id = bt.bill_id
+        WHERE bt.user_id = :uid
+        ORDER BY b.year DESC, b.number DESC
+    """), {"uid": current_user.id}).fetchall()
+    return [dict(r._mapping) for r in rows]

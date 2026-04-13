@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type Politician = {
   id: number;
@@ -31,6 +32,7 @@ const SELECT_CLASS =
   "h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 export default function DeputadosPage() {
+  const { t } = useLanguage();
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -74,9 +76,9 @@ export default function DeputadosPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">Deputados Federais</h1>
+        <h1 className="text-2xl font-bold mb-1">{t("deputies.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          {total.toLocaleString("pt-BR")} deputados em exercício — 57ª Legislatura
+          {total.toLocaleString("pt-BR")} {t("deputies.subtitle")}
         </p>
       </div>
 
@@ -84,7 +86,7 @@ export default function DeputadosPage() {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Input
           type="search"
-          placeholder="Buscar por nome..."
+          placeholder={t("deputies.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-52"
@@ -94,7 +96,7 @@ export default function DeputadosPage() {
           onChange={(e) => setStateFilter(e.target.value)}
           className={SELECT_CLASS}
         >
-          <option value="">Todos os estados</option>
+          <option value="">{t("deputies.all_states")}</option>
           {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select
@@ -102,12 +104,12 @@ export default function DeputadosPage() {
           onChange={(e) => setPartyFilter(e.target.value)}
           className={SELECT_CLASS}
         >
-          <option value="">Todos os partidos</option>
+          <option value="">{t("deputies.all_parties")}</option>
           {PARTIES.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-            Limpar filtros
+            {t("deputies.clear")}
           </Button>
         )}
       </div>
@@ -121,10 +123,10 @@ export default function DeputadosPage() {
         </div>
       ) : politicians.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-muted-foreground">Nenhum deputado encontrado.</p>
+          <p className="text-muted-foreground">{t("deputies.empty")}</p>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-2">
-              Limpar filtros
+              {t("deputies.clear")}
             </Button>
           )}
         </div>
@@ -161,13 +163,13 @@ export default function DeputadosPage() {
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-4 mt-10">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-            Anterior
+            {t("shared.prev")}
           </Button>
           <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
+            {t("shared.page_of", { page, total: totalPages })}
           </span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            Próxima
+            {t("shared.next")}
           </Button>
         </div>
       )}

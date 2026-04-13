@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -26,6 +29,7 @@ type Stats = { votes: number; speeches: number; bills: number };
 type Vote = {
   vote: string;
   voted_at: string;
+  votacao_id: number;
   short_title: string | null;
   description: string | null;
   type: string | null;
@@ -44,6 +48,46 @@ type Speech = {
   full_text_url: string | null;
 };
 
+type Bill = {
+  id: number;
+  type: string | null;
+  number: number | null;
+  year: number | null;
+  short_title: string | null;
+  ementa: string | null;
+  status: string | null;
+  policy_area: string | null;
+};
+
+type Donor = {
+  name: string;
+  donor_type: string;
+  cpf_cnpj_masked: string | null;
+  donor_state: string | null;
+  amount_brl: number;
+  election_year: number;
+  source_type: string | null;
+};
+
+type ActivityItem = {
+  event_type: "vote" | "speech";
+  event_date: string;
+  event_id: number;
+  title: string | null;
+  description: string | null;
+  vote: string | null;
+  votacao_id: number | null;
+};
+
+type Committee = {
+  id: number;
+  acronym: string | null;
+  name: string | null;
+  role: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+};
+
 const VOTE_LABEL: Record<string, { label: string; color: string }> = {
   Sim:        { label: "Sim",        color: "bg-green-100 text-green-800" },
   Não:        { label: "Não",        color: "bg-red-100 text-red-800" },
@@ -51,16 +95,31 @@ const VOTE_LABEL: Record<string, { label: string; color: string }> = {
   Obstrução:  { label: "Obstrução",  color: "bg-orange-100 text-orange-800" },
 };
 
-const TABS = ["Atividade recente", "Votações", "Discursos", "Projetos de Lei", "Doadores"];
-
 export default function PoliticianPage({ params }: { params: { id: string } }) {
   const id = params.id;
+  const { t } = useLanguage();
+  const { user, token } = useAuth();
   const [politician, setPolitician] = useState<Politician | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [votes, setVotes] = useState<Vote[]>([]);
-  const [speeches, setSpeeches] = useState<Speech[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[] | null>(null);
+  const [votes, setVotes] = useState<Vote[] | null>(null);
+  const [speeches, setSpeeches] = useState<Speech[] | null>(null);
+  const [bills, setBills] = useState<Bill[] | null>(null);
+  const [donors, setDonors] = useState<Donor[] | null>(null);
+  const [committees, setCommittees] = useState<Committee[] | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [following, setFollowing] = useState<boolean | null>(null);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const TABS = [
+    t("politician.tab_activity"),
+    t("politician.tab_votes"),
+    t("politician.tab_speeches"),
+    t("politician.tab_bills"),
+    t("politician.tab_donors"),
+    t("politician.tab_committees"),
+  ];
 
   useEffect(() => {
     Promise.all([
@@ -73,12 +132,57 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
     });
   }, [id]);
 
+  // Fetch follow status when user is logged in
   useEffect(() => {
-    if (activeTab === 1 && votes.length === 0) {
-      fetch(`${API}/politicians/${id}/votes?page_size=20`).then(r => r.json()).then(d => setVotes(d.items));
+    if (!token) { setFollowing(null); return; }
+    fetch(`${API}/politicians/${id}/follow`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setFollowing(d.following); })
+      .catch(() => {});
+  }, [id, token]);
+
+  async function toggleFollow() {
+    if (!token) { window.location.href = "/login"; return; }
+    setFollowLoading(true);
+    try {
+      const method = following ? "DELETE" : "POST";
+      const r = await fetch(`${API}/politicians/${id}/follow`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setFollowing(data.following);
+      }
+    } finally {
+      setFollowLoading(false);
     }
-    if (activeTab === 2 && speeches.length === 0) {
-      fetch(`${API}/politicians/${id}/speeches?page_size=20`).then(r => r.json()).then(d => setSpeeches(d.items));
+  }
+
+  useEffect(() => {
+    if (activeTab === 0 && activity === null) {
+      fetch(`${API}/politicians/${id}/activity?page_size=20`)
+        .then(r => r.json()).then(d => setActivity(d.items ?? [])).catch(() => setActivity([]));
+    }
+    if (activeTab === 1 && votes === null) {
+      fetch(`${API}/politicians/${id}/votes?page_size=20`)
+        .then(r => r.json()).then(d => setVotes(d.items ?? [])).catch(() => setVotes([]));
+    }
+    if (activeTab === 2 && speeches === null) {
+      fetch(`${API}/politicians/${id}/speeches?page_size=20`)
+        .then(r => r.json()).then(d => setSpeeches(d.items ?? [])).catch(() => setSpeeches([]));
+    }
+    if (activeTab === 3 && bills === null) {
+      fetch(`${API}/bills/?author_politician_id=${id}&page_size=20`)
+        .then(r => r.json()).then(d => setBills(d.items ?? [])).catch(() => setBills([]));
+    }
+    if (activeTab === 4 && donors === null) {
+      fetch(`${API}/donations/politician/${id}`)
+        .then(r => r.json()).then(d => setDonors(Array.isArray(d) ? d : [])).catch(() => setDonors([]));
+    }
+    if (activeTab === 5 && committees === null) {
+      fetch(`${API}/politicians/${id}/committees`)
+        .then(r => r.json()).then(d => setCommittees(Array.isArray(d) ? d : [])).catch(() => setCommittees([]));
     }
   }, [activeTab, id]);
 
@@ -96,9 +200,11 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
     </main>
   );
 
-  if (!politician) return <main className="max-w-5xl mx-auto px-4 py-10"><p>Parlamentar não encontrado.</p></main>;
+  if (!politician) return <main className="max-w-5xl mx-auto px-4 py-10"><p>{t("politician.not_found")}</p></main>;
 
-  const officeLabel = politician.current_office === "deputado" ? "Deputado Federal" : "Senador";
+  const officeLabel = politician.current_office === "deputado"
+    ? t("politician.office_deputy")
+    : t("politician.office_senator");
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
@@ -129,18 +235,26 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
           {stats?.votes !== undefined && (
             <div className="flex flex-wrap gap-3 text-sm">
               <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.votes.toLocaleString("pt-BR")}</strong> votos nominais
+                <strong className="text-foreground">{stats.votes.toLocaleString("pt-BR")}</strong> {t("politician.stat_votes")}
               </span>
               <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.speeches.toLocaleString("pt-BR")}</strong> discursos
+                <strong className="text-foreground">{stats.speeches.toLocaleString("pt-BR")}</strong> {t("politician.stat_speeches")}
               </span>
               <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.bills.toLocaleString("pt-BR")}</strong> projetos de lei
+                <strong className="text-foreground">{stats.bills.toLocaleString("pt-BR")}</strong> {t("politician.stat_bills")}
               </span>
             </div>
           )}
         </div>
-        <Button variant="outline" size="sm" className="flex-shrink-0">+ Seguir</Button>
+        <Button
+          variant={following ? "default" : "outline"}
+          size="sm"
+          className="flex-shrink-0"
+          onClick={toggleFollow}
+          disabled={followLoading}
+        >
+          {following ? t("politician.following") : t("politician.follow")}
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -166,40 +280,41 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
 
       {/* Atividade recente */}
       {activeTab === 0 && (
-        <EmptyState message="Execute o ETL de votos e discursos para ver a atividade recente." />
-      )}
-
-      {/* Votações */}
-      {activeTab === 1 && (
-        votes.length === 0
-          ? <EmptyState message="Nenhum voto nominal registrado ainda." />
+        activity === null ? <TabSkeleton />
+          : activity.length === 0
+          ? <EmptyState message={t("politician.empty_activity")} />
           : <div className="space-y-3">
-              {votes.map((v, i) => {
-                const voteStyle = VOTE_LABEL[v.vote] ?? { label: v.vote, color: "bg-muted text-muted-foreground" };
-                return (
-                  <Card key={i}>
-                    <CardContent className="p-4 flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {v.short_title ?? v.description ?? "Votação sem título"}
-                        </p>
-                        {v.type && v.number && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {v.type} {v.number}/{v.year}
-                          </p>
-                        )}
-                        {v.party_orientation && v.followed_orientation === false && (
-                          <p className="text-xs text-orange-600 mt-0.5">Divergiu da orientação do partido ({v.party_orientation})</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${voteStyle.color}`}>
+              {activity.map((item) => {
+                const date = item.event_date
+                  ? new Date(item.event_date).toLocaleDateString("pt-BR")
+                  : "—";
+                if (item.event_type === "vote") {
+                  const voteStyle = VOTE_LABEL[item.vote ?? ""] ?? { label: item.vote ?? "—", color: "bg-muted text-muted-foreground" };
+                  const card = (
+                    <Card>
+                      <CardContent className="p-4 flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <Badge variant="outline" className="text-xs mb-1">{t("politician.badge_vote")}</Badge>
+                          <p className="text-sm font-medium truncate">{item.title ?? t("politician.no_title")}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{date}</p>
+                        </div>
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${voteStyle.color}`}>
                           {voteStyle.label}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {v.voted_at ? new Date(v.voted_at).toLocaleDateString("pt-BR") : "—"}
-                        </span>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  );
+                  return item.votacao_id
+                    ? <Link key={`vote-${item.event_id}`} href={`/votacao/${item.votacao_id}`} className="block hover:opacity-80 transition-opacity">{card}</Link>
+                    : <div key={`vote-${item.event_id}`}>{card}</div>;
+                }
+                return (
+                  <Card key={`speech-${item.event_id}`}>
+                    <CardContent className="p-4">
+                      <Badge variant="outline" className="text-xs mb-1">{t("politician.badge_speech")}</Badge>
+                      <p className="text-sm font-medium">{item.title ?? t("politician.badge_speech")}</p>
+                      {item.description && <p className="text-sm text-muted-foreground mt-1">{item.description}</p>}
+                      <p className="text-xs text-muted-foreground mt-1">{date}</p>
                     </CardContent>
                   </Card>
                 );
@@ -207,10 +322,52 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
             </div>
       )}
 
+      {/* Votações */}
+      {activeTab === 1 && (
+        votes === null ? <TabSkeleton />
+          : votes.length === 0
+          ? <EmptyState message={t("politician.empty_votes")} />
+          : <div className="space-y-3">
+              {votes.map((v, i) => {
+                const voteStyle = VOTE_LABEL[v.vote] ?? { label: v.vote, color: "bg-muted text-muted-foreground" };
+                return (
+                  <Link key={i} href={`/votacao/${v.votacao_id}`} className="block hover:opacity-80 transition-opacity">
+                    <Card>
+                      <CardContent className="p-4 flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {v.short_title ?? v.description ?? t("politician.no_title")}
+                          </p>
+                          {v.type && v.number && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {v.type} {v.number}/{v.year}
+                            </p>
+                          )}
+                          {v.party_orientation && v.followed_orientation === false && (
+                            <p className="text-xs text-orange-600 mt-0.5">{t("politician.diverged")} ({v.party_orientation})</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${voteStyle.color}`}>
+                            {voteStyle.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {v.voted_at ? new Date(v.voted_at).toLocaleDateString("pt-BR") : "—"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+      )}
+
       {/* Discursos */}
       {activeTab === 2 && (
-        speeches.length === 0
-          ? <EmptyState message="Nenhum discurso registrado ainda." />
+        speeches === null ? <TabSkeleton />
+          : speeches.length === 0
+          ? <EmptyState message={t("politician.empty_speeches")} />
           : <div className="space-y-3">
               {speeches.map((s) => (
                 <Card key={s.id}>
@@ -223,11 +380,11 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
                       {s.full_text_url && (
                         <a href={s.full_text_url} target="_blank" rel="noopener noreferrer"
                           className="text-xs text-primary hover:underline flex-shrink-0">
-                          Ver íntegra
+                          {t("politician.read_full")}
                         </a>
                       )}
                     </div>
-                    <p className="text-sm">{s.summary ?? "Resumo não disponível."}</p>
+                    <p className="text-sm">{s.summary ?? t("politician.no_summary")}</p>
                     {s.keywords && s.keywords.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {s.keywords.map((k) => <Badge key={k} variant="secondary">{k}</Badge>)}
@@ -240,10 +397,108 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Projetos de Lei */}
-      {activeTab === 3 && <EmptyState message="Nenhum projeto de lei registrado ainda." />}
+      {activeTab === 3 && (
+        bills === null ? <TabSkeleton />
+          : bills.length === 0
+          ? <EmptyState message={t("politician.empty_bills_note")} />
+          : <div className="space-y-3">
+              {bills.map((b) => (
+                <Link key={b.id} href={`/proposicao/${b.id}`} className="block hover:opacity-80 transition-opacity">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">
+                            {b.short_title ?? b.ementa ?? t("bills.no_title")}
+                          </p>
+                          {b.type && b.number && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {b.type} {b.number}/{b.year}
+                            </p>
+                          )}
+                          {b.policy_area && (
+                            <Badge variant="secondary" className="mt-1 text-xs">{b.policy_area}</Badge>
+                          )}
+                        </div>
+                        {b.status && (
+                          <Badge variant="outline" className="flex-shrink-0 text-xs">{b.status}</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+      )}
 
       {/* Doadores */}
-      {activeTab === 4 && <EmptyState message="Dados do TSE não carregados ainda." />}
+      {activeTab === 4 && (
+        donors === null ? <TabSkeleton />
+          : donors.length === 0
+          ? <EmptyState message={t("politician.empty_donors")} />
+          : <div>
+              <p className="text-xs text-muted-foreground mb-3">
+                {t("politician.donors_note")}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      <th className="pb-2 font-medium">{t("politician.donors_col_name")}</th>
+                      <th className="pb-2 font-medium">{t("politician.donors_col_type")}</th>
+                      <th className="pb-2 font-medium">{t("politician.donors_col_year")}</th>
+                      <th className="pb-2 font-medium text-right">{t("politician.donors_col_amount")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {donors.map((d, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="py-2 pr-4">
+                          <p className="font-medium truncate max-w-[200px]">{d.name}</p>
+                          {d.cpf_cnpj_masked && (
+                            <p className="text-xs text-muted-foreground">{d.cpf_cnpj_masked}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                          {d.donor_type === "individual" ? t("politician.donor_individual") : t("politician.donor_company")}
+                        </td>
+                        <td className="py-2 pr-4 text-xs text-muted-foreground">{d.election_year}</td>
+                        <td className="py-2 text-right font-medium tabular-nums whitespace-nowrap">
+                          {d.amount_brl.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+      )}
+
+      {/* Comissões */}
+      {activeTab === 5 && (
+        committees === null ? <TabSkeleton />
+          : committees.length === 0
+          ? <EmptyState message={t("politician.empty_committees")} />
+          : <div className="space-y-2">
+              {committees.map((c) => (
+                <div key={c.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.name ?? c.acronym ?? "—"}</p>
+                    {c.acronym && c.name && (
+                      <p className="text-xs text-muted-foreground">{c.acronym}</p>
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    {c.role && (
+                      <Badge variant={c.ended_at ? "secondary" : "default"} className="text-xs">
+                        {c.role}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+      )}
 
     </main>
   );
@@ -252,5 +507,15 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-16 text-muted-foreground text-sm">{message}</div>
+  );
+}
+
+function TabSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="animate-pulse bg-muted rounded-lg h-16" />
+      ))}
+    </div>
   );
 }

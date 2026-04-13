@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
@@ -36,6 +37,7 @@ function statusColor(status: string | null) {
 }
 
 export default function ProposicoesPage() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<Bill[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -46,8 +48,8 @@ export default function ProposicoesPage() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
@@ -78,9 +80,9 @@ export default function ProposicoesPage() {
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">Proposições</h1>
+        <h1 className="text-2xl font-bold mb-1">{t("bills.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          {total.toLocaleString("pt-BR")} proposições registradas — Câmara dos Deputados
+          {total.toLocaleString("pt-BR")} {t("bills.subtitle")}
         </p>
       </div>
 
@@ -88,7 +90,7 @@ export default function ProposicoesPage() {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Input
           type="search"
-          placeholder="Buscar por título ou ementa..."
+          placeholder={t("bills.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-72"
@@ -98,12 +100,12 @@ export default function ProposicoesPage() {
           onChange={(e) => setTypeFilter(e.target.value)}
           className={SELECT_CLASS}
         >
-          <option value="">Todos os tipos</option>
-          {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          <option value="">{t("bills.all_types")}</option>
+          {TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
         </select>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setTypeFilter(""); }} className="text-muted-foreground">
-            Limpar filtros
+            {t("bills.clear")}
           </Button>
         )}
       </div>
@@ -116,16 +118,16 @@ export default function ProposicoesPage() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">Nenhuma proposição encontrada.</div>
+        <div className="text-center py-20 text-muted-foreground">{t("bills.empty")}</div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Tipo</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Proposição</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48 hidden md:table-cell">Autor</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40 hidden sm:table-cell">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("bills.col_type")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("bills.col_bill")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48 hidden md:table-cell">{t("bills.col_author")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40 hidden sm:table-cell">{t("bills.col_status")}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -143,7 +145,7 @@ export default function ProposicoesPage() {
                   <td className="px-4 py-3">
                     <Link href={`/proposicao/${b.id}`} className="hover:text-primary transition-colors">
                       <span className="font-medium line-clamp-2">
-                        {b.short_title ?? b.ementa ?? b.title ?? "Sem título"}
+                        {b.short_title ?? b.ementa ?? b.title ?? t("bills.no_title")}
                       </span>
                     </Link>
                   </td>
@@ -168,13 +170,13 @@ export default function ProposicoesPage() {
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-4 mt-8">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-            Anterior
+            {t("shared.prev")}
           </Button>
           <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
+            {t("shared.page_of", { page, total: totalPages })}
           </span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            Próxima
+            {t("shared.next")}
           </Button>
         </div>
       )}
