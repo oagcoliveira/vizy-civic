@@ -40,7 +40,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine
-from app.routers import auth, politicians, bills, votes, donations, feed, search, parties, speeches
+from app.routers import auth, politicians, bills, votes, donations, feed, search, parties, speeches, digests
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -259,6 +259,7 @@ app.include_router(feed.router,        prefix="/feed",        tags=["feed"])
 app.include_router(search.router,      prefix="/search",      tags=["search"])
 app.include_router(parties.router,     prefix="/parties",     tags=["parties"])
 app.include_router(speeches.router,    prefix="/speeches",    tags=["speeches"])
+app.include_router(digests.router,     prefix="/digests",     tags=["digests"])
 
 
 # ---------------------------------------------------------------------------

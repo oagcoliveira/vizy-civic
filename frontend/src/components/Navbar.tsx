@@ -22,6 +22,7 @@ export function Navbar() {
             <Link href="/proposicoes" className="hover:text-foreground transition-colors">{t("nav.bills")}</Link>
             <Link href="/doacoes" className="hover:text-foreground transition-colors">{t("nav.donations")}</Link>
             <Link href="/busca" className="hover:text-foreground transition-colors">{t("nav.search")}</Link>
+            <Link href="/digest" className="hover:text-foreground transition-colors font-semibold text-primary">{t("nav.digest")}</Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
