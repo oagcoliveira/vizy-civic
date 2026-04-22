@@ -93,7 +93,7 @@ function MultiSelect({ options, selected, onChange, placeholder }: MultiSelectPr
       : allSelected
       ? placeholder
       : selected.size === 1
-      ? [...selected][0]
+      ? Array.from(selected)[0]
       : `${selected.size} tipos`;
 
   return (
@@ -173,7 +173,7 @@ export default function ProposicoesPage() {
     if (debouncedSearch) params.set("search", debouncedSearch);
     // Pass selected types as comma-separated; if all selected, omit for efficiency
     if (selectedTypes.size > 0 && selectedTypes.size < BILL_TYPES.length) {
-      params.set("types", [...selectedTypes].join(","));
+      params.set("types", Array.from(selectedTypes).join(","));
     }
 
     setLoading(true);
@@ -192,7 +192,7 @@ export default function ProposicoesPage() {
   const isDefaultFilter =
     search === "" &&
     selectedTypes.size === DEFAULT_SELECTED.size &&
-    [...selectedTypes].every((v) => DEFAULT_SELECTED.has(v));
+    Array.from(selectedTypes).every((v) => DEFAULT_SELECTED.has(v));
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
