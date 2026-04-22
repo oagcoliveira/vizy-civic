@@ -502,7 +502,7 @@ const en: Record<keyof typeof pt, string> = {
 
 export type TranslationKey = keyof typeof pt;
 
-export const translations: Record<Lang, typeof pt> = { pt, en };
+export const translations: Record<Lang, Record<TranslationKey, string>> = { pt, en };
 
 export function t(lang: Lang, key: TranslationKey, vars?: Record<string, string | number>): string {
   let str: string = translations[lang][key] ?? translations.pt[key] ?? key;
