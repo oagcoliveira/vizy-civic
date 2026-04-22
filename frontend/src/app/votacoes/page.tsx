@@ -110,13 +110,13 @@ function AcronymHelp({ titleKey, mapPt, mapEn }: {
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-5 h-5 rounded-full bg-muted border text-muted-foreground text-xs font-bold leading-none flex items-center justify-center hover:bg-muted/80 transition-colors"
-        aria-label={t(titleKey)}
+        aria-label={t(titleKey as Parameters<typeof t>[0])}
       >
         ?
       </button>
       {open && (
         <div className="absolute left-0 top-7 z-50 w-80 rounded-lg border border-gray-200 bg-white shadow-lg p-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t(titleKey)}</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t(titleKey as Parameters<typeof t>[0])}</p>
           <div className="space-y-1 max-h-72 overflow-y-auto">
             {Object.entries(map).map(([acronym, name]) => (
               <div key={acronym} className="flex gap-2 text-xs">
