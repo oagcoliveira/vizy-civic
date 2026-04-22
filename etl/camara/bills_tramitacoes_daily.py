@@ -16,10 +16,13 @@ Usage:
 import argparse
 from datetime import datetime, timezone
 
+import sys
 from sqlalchemy import text
 
-from db import engine
+from db import engine, log_run
 from camara.client import get
+
+JOB_NAME = "camara_bills_tramitacoes_daily"
 
 ARCHIVED_KEYWORDS = ("arquivada", "prejudicada", "encerrada", "retirada")
 
@@ -32,6 +35,15 @@ def is_archived(status: str | None) -> bool:
 
 
 def run(limit: int | None = None):
+    try:
+        _run(limit)
+    except Exception as exc:
+        log_run(JOB_NAME, "failed", error=str(exc))
+        print(f"[{JOB_NAME}] FAILED: {exc}", file=sys.stderr, flush=True)
+        raise
+
+
+def _run(limit: int | None = None):
     started_at = datetime.now(timezone.utc)
 
     with engine.connect() as conn:
@@ -101,14 +113,8 @@ def run(limit: int | None = None):
             """), rows)
             inserted_total += result.rowcount
 
-    # Log ETL run
-    finished_at = datetime.now(timezone.utc)
-    with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO jobs.etl_runs (job_name, status, started_at, finished_at, records_inserted)
-            VALUES ('bills_tramitacoes_daily', 'success', :s, :f, :r)
-        """), {"s": started_at, "f": finished_at, "r": inserted_total})
-
+    log_run(JOB_NAME, "success", fetched=total, inserted=inserted_total,
+            params={"limit": limit})
     print(f"Done! Inserted {inserted_total} new tramitação events across {total} bills.", flush=True)
 
 

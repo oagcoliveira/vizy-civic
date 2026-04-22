@@ -29,8 +29,10 @@ load_dotenv(override=True)  # must come before reading env vars so .env wins ove
 from sqlalchemy import text
 from anthropic import Anthropic
 
-from db import engine
+from db import engine, log_run
 from camara.client import get
+
+JOB_NAME = "camara_bills_daily"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
@@ -154,6 +156,19 @@ def backfill_author_ids():
 
 
 def run(limit: int | None = None):
+    import sys
+    started_at_run = __import__('datetime').datetime.now(__import__('datetime').timezone.utc)
+    fetched_total = 0
+    updated_total = 0
+    try:
+        _run(limit)
+    except Exception as exc:
+        log_run(JOB_NAME, "failed", error=str(exc))
+        print(f"[{JOB_NAME}] FAILED: {exc}", file=sys.stderr, flush=True)
+        raise
+
+
+def _run(limit: int | None = None):
     # Backfill author IDs for existing bills (idempotent — only updates NULL rows)
     backfill_author_ids()
 
@@ -222,6 +237,8 @@ def run(limit: int | None = None):
                 "policy_area": ai.get("policy_area"),
             })
 
+    log_run(JOB_NAME, "success", fetched=total, updated=total,
+            params={"limit": limit})
     print(f"Done! Enriched {total} bills.", flush=True)
 
 
