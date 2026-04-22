@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -13,8 +13,9 @@ function brl(n: number) {
   return `R$ ${n.toFixed(0)}`;
 }
 
-function brlFull(n: number) {
-  return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function brlFull(n: number, lang: string) {
+  const locale = lang === "en" ? "en-US" : "pt-BR";
+  return "R$ " + Number(n).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 type DonorSummary = {
@@ -52,6 +53,7 @@ type Props = {
 };
 
 export function DonorModal({ donorId, donorName, onClose }: Props) {
+  const { t, lang } = useLanguage();
   const [data, setData] = useState<DonorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -98,7 +100,9 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
             <h2 className="text-lg font-semibold truncate">{donorName}</h2>
             {data && (
               <p className="text-sm text-muted-foreground mt-0.5">
-                {data.donor.donor_type === "company" ? "Pessoa Jurídica" : "Pessoa Física"}
+                {data.donor.donor_type === "company"
+                  ? t("donor.type_company")
+                  : t("donor.type_individual")}
                 {data.donor.cpf_cnpj_masked && (
                   <span className="ml-2 font-mono">{data.donor.cpf_cnpj_masked}</span>
                 )}
@@ -111,7 +115,7 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
           <button
             onClick={onClose}
             className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label="Fechar"
+            aria-label={t("donor.close")}
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -123,15 +127,15 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
         {data && (
           <div className="flex flex-wrap gap-6 px-6 py-3 bg-muted/30 border-b text-sm">
             <div>
-              <span className="text-muted-foreground">Total doado</span>
+              <span className="text-muted-foreground">{t("donor.total_donated")}</span>
               <span className="ml-2 font-semibold tabular-nums">{brl(Number(data.donor.total_amount))}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">Candidatos</span>
+              <span className="text-muted-foreground">{t("donor.recipients")}</span>
               <span className="ml-2 font-semibold">{data.donor.recipient_count}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">Eleições</span>
+              <span className="text-muted-foreground">{t("donor.elections")}</span>
               <span className="ml-2 font-semibold">{data.donor.election_count}</span>
             </div>
           </div>
@@ -148,23 +152,23 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
           )}
           {error && (
             <p className="text-center py-12 text-muted-foreground">
-              Não foi possível carregar os dados deste doador.
+              {t("donor.error")}
             </p>
           )}
           {data && data.donations.length === 0 && (
             <p className="text-center py-12 text-muted-foreground">
-              Nenhuma doação encontrada para este doador.
+              {t("donor.empty")}
             </p>
           )}
           {data && data.donations.length > 0 && (
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-background border-b">
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium">Candidato</th>
-                  <th className="pb-2 font-medium hidden sm:table-cell">Partido-UF</th>
-                  <th className="pb-2 font-medium">Ano</th>
-                  <th className="pb-2 font-medium text-right">Valor</th>
-                  <th className="pb-2 font-medium hidden md:table-cell">Tipo de receita</th>
+                  <th className="pb-2 font-medium">{t("donor.col_candidate")}</th>
+                  <th className="pb-2 font-medium hidden sm:table-cell">{t("donor.col_party_uf")}</th>
+                  <th className="pb-2 font-medium">{t("donor.col_year")}</th>
+                  <th className="pb-2 font-medium text-right">{t("donor.col_amount")}</th>
+                  <th className="pb-2 font-medium hidden md:table-cell">{t("donor.col_source")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -191,7 +195,7 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
                     </td>
                     <td className="py-2 pr-3 text-xs text-muted-foreground">{row.election_year}</td>
                     <td className="py-2 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap">
-                      {brlFull(row.amount_brl)}
+                      {brlFull(row.amount_brl, lang)}
                     </td>
                     <td className="py-2 pl-3 text-xs text-muted-foreground hidden md:table-cell">
                       <span className="line-clamp-1">{row.source_type ?? "—"}</span>
@@ -205,9 +209,9 @@ export function DonorModal({ donorId, donorName, onClose }: Props) {
 
         {/* Footer */}
         <div className="px-6 py-3 border-t text-xs text-muted-foreground">
-          Dados: TSE — Prestação de Contas Eleitorais
+          {t("donor.footer_note")}
           {data && data.donations.length >= 500 && (
-            <span className="ml-2 text-orange-600">(exibindo os 500 maiores registros)</span>
+            <span className="ml-2 text-orange-600">{t("donor.cap_warning")}</span>
           )}
         </div>
       </div>

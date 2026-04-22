@@ -243,6 +243,23 @@ const pt = {
   "feed.event_voted":        "Votou",
   "feed.event_speech":       "Discursou",
 
+  // ── Donor modal ─────────────────────────────────────────────────────────────
+  "donor.type_company":    "Pessoa Jurídica",
+  "donor.type_individual": "Pessoa Física",
+  "donor.close":           "Fechar",
+  "donor.total_donated":   "Total doado",
+  "donor.recipients":      "Candidatos",
+  "donor.elections":       "Eleições",
+  "donor.error":           "Não foi possível carregar os dados deste doador.",
+  "donor.empty":           "Nenhuma doação encontrada para este doador.",
+  "donor.col_candidate":   "Candidato",
+  "donor.col_party_uf":    "Partido-UF",
+  "donor.col_year":        "Ano",
+  "donor.col_amount":      "Valor",
+  "donor.col_source":      "Tipo de receita",
+  "donor.footer_note":     "Dados: TSE — Prestação de Contas Eleitorais",
+  "donor.cap_warning":     "(exibindo os 500 maiores registros)",
+
   // ── Shared ───────────────────────────────────────────────────────────────────
   "shared.prev":        "Anterior",
   "shared.next":        "Próxima",
@@ -492,6 +509,23 @@ const en: Record<keyof typeof pt, string> = {
   "feed.load_more":          "Load more",
   "feed.event_voted":        "Voted",
   "feed.event_speech":       "Spoke",
+
+  // ── Donor modal ─────────────────────────────────────────────────────────────
+  "donor.type_company":    "Legal Entity",
+  "donor.type_individual": "Individual",
+  "donor.close":           "Close",
+  "donor.total_donated":   "Total donated",
+  "donor.recipients":      "Candidates",
+  "donor.elections":       "Elections",
+  "donor.error":           "Could not load data for this donor.",
+  "donor.empty":           "No donations found for this donor.",
+  "donor.col_candidate":   "Candidate",
+  "donor.col_party_uf":    "Party-State",
+  "donor.col_year":        "Year",
+  "donor.col_amount":      "Amount",
+  "donor.col_source":      "Source type",
+  "donor.footer_note":     "Data: TSE — Electoral Accounts",
+  "donor.cap_warning":     "(showing the top 500 records)",
 
   // ── Shared ───────────────────────────────────────────────────────────────────
   "shared.prev":        "Previous",
