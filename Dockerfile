@@ -17,4 +17,4 @@ COPY backend/ /app/
 COPY etl/ /app/etl/
 
 # Use $PORT env var set by Railway (falls back to 8000 locally)
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD ["/bin/sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
