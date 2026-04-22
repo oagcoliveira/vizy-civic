@@ -90,7 +90,7 @@ export default function PartidosPage() {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number, name: string) => [`${value} deputados`, name]}
+                formatter={(value, name) => [`${value} deputados`, name]}
               />
               <Legend
                 formatter={(value) => (

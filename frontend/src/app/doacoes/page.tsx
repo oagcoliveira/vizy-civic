@@ -286,7 +286,7 @@ export default function DoacoesPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="election_year" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={brl} tick={{ fontSize: 10 }} width={68} />
-                <Tooltip formatter={(v: number | string) => brlFull(Number(v))} />
+                <Tooltip formatter={(v) => v != null ? brlFull(Number(v)) : ""} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {sourceKeys.map((key, i) => (
                   <Area key={key} type="monotone" dataKey={key} stackId="a"
@@ -310,7 +310,7 @@ export default function DoacoesPage() {
                        tick={<RotatedTick partyLinks={partyLinks} />} />
                 <YAxis tickFormatter={brl} tick={{ fontSize: 10 }} width={60} />
                 <Tooltip
-                  formatter={(v: number) => [brlFull(v), t("donations.chart_total")]}
+                  formatter={(v) => [v != null ? brlFull(Number(v)) : "", t("donations.chart_total")]}
                   labelFormatter={label => byParty.find(p => p.acronym === label)?.name ?? label}
                 />
                 <Bar dataKey="total_amount" radius={[4, 4, 0, 0]}>
