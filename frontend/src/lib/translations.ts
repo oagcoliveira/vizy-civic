@@ -250,7 +250,7 @@ const pt = {
   "shared.loading":     "Carregando...",
 } as const;
 
-const en: typeof pt = {
+const en: Record<keyof typeof pt, string> = {
   // ── Navbar ──────────────────────────────────────────────────────────────────
   "nav.deputies":     "Deputies",
   "nav.parties":      "Parties",
