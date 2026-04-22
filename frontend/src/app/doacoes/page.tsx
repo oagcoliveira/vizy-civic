@@ -11,6 +11,16 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const YEARS = [2010, 2014, 2018, 2022];
+
+type SourceCategory = "" | "individual" | "company" | "party" | "other";
+
+function sourceCategory(raw: string): SourceCategory {
+  const s = raw.toLowerCase();
+  if (s.includes("pessoa") && (s.includes("física") || s.includes("fisic"))) return "individual";
+  if (s.includes("pessoa") && (s.includes("jurídica") || s.includes("juridic"))) return "company";
+  if (s.includes("fundo") || s.includes("partido")) return "party";
+  return "other";
+}
 const COLORS = ["#2563eb","#16a34a","#dc2626","#d97706","#7c3aed",
                 "#0891b2","#be185d","#65a30d","#ea580c","#6d28d9"];
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
@@ -138,12 +148,11 @@ export default function DoacoesPage() {
   const [year, setYear]                 = useState("");
   const [partyId, setPartyId]           = useState("");
   const [state, setState]               = useState("");
-  const [sourceType, setSourceType]     = useState("");
+  const [sourceCat, setSourceCat]       = useState<SourceCategory>("");
   const [donorType, setDonorType]       = useState("");
   const [politicianId, setPoliticianId] = useState("");
 
   const [parties, setParties]         = useState<Party[]>([]);
-  const [sourceTypes, setSourceTypes] = useState<string[]>([]);
 
   const [summary,      setSummary]      = useState<Summary | null>(null);
   const [byYearRaw,    setByYearRaw]    = useState<YearSourceRow[]>([]);
@@ -153,7 +162,6 @@ export default function DoacoesPage() {
 
   useEffect(() => {
     fetch(`${API}/parties/`).then(r => r.json()).then(setParties).catch(() => {});
-    fetch(`${API}/donations/source-types`).then(r => r.json()).then(setSourceTypes).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -161,7 +169,6 @@ export default function DoacoesPage() {
     if (year)         p.set("year", year);
     if (partyId)      p.set("party_id", partyId);
     if (state)        p.set("state", state);
-    if (sourceType)   p.set("source_type", sourceType);
     if (donorType)    p.set("donor_type", donorType);
     if (politicianId) p.set("politician_id", politicianId);
     const qs = p.toString();
@@ -177,30 +184,37 @@ export default function DoacoesPage() {
     get("by-party").then(setByParty).catch(() => setByParty([]));
     get("top-politicians?limit=20").then(setTopPols).catch(() => setTopPols([]));
     get("top-donors?limit=20").then(setTopDonors).catch(() => setTopDonors([]));
-  }, [year, partyId, state, sourceType, donorType, politicianId]);
+  }, [year, partyId, state, donorType, politicianId]);
 
-  // Pivot raw (year, source_type, total) rows into { election_year, [source]: amount, ... }
+  // Pivot raw (year, source_type, total) rows into { election_year, [key]: amount, ... }
+  // When sourceCat is set, group by category; otherwise by raw source_type
+  const filteredByYearRaw = useMemo(() => {
+    if (!sourceCat) return byYearRaw;
+    return byYearRaw.filter(r => sourceCategory(r.source_type) === sourceCat);
+  }, [byYearRaw, sourceCat]);
+
   const byYear = useMemo(() => {
     const map: Record<number, any> = {};
-    byYearRaw.forEach(r => {
+    filteredByYearRaw.forEach(r => {
+      const key = sourceCat ? sourceCat : r.source_type;
       if (!map[r.election_year]) map[r.election_year] = { election_year: r.election_year };
-      map[r.election_year][r.source_type] = Number(r.total_amount);
+      map[r.election_year][key] = (map[r.election_year][key] ?? 0) + Number(r.total_amount);
     });
     return Object.values(map).sort((a, b) => a.election_year - b.election_year);
-  }, [byYearRaw]);
+  }, [filteredByYearRaw, sourceCat]);
 
   const sourceKeys = useMemo(
-    () => [...new Set(byYearRaw.map(r => r.source_type))],
-    [byYearRaw]
+    () => sourceCat ? [sourceCat] : Array.from(new Set(byYearRaw.map(r => r.source_type))),
+    [byYearRaw, sourceCat]
   );
 
   const partyLinks: Record<string, string> = {};
   byParty.forEach(p => { partyLinks[p.acronym] = `/partidos/${p.id}`; });
 
-  const hasFilters = year || partyId || state || sourceType || donorType || politicianId;
+  const hasFilters = year || partyId || state || sourceCat || donorType || politicianId;
   const clearAll = () => {
     setYear(""); setPartyId(""); setState("");
-    setSourceType(""); setDonorType(""); setPoliticianId("");
+    setSourceCat(""); setDonorType(""); setPoliticianId("");
   };
 
   return (
@@ -224,9 +238,12 @@ export default function DoacoesPage() {
           <option value="">{t("donations.all_states")}</option>
           {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
         </select>
-        <select value={sourceType} onChange={e => setSourceType(e.target.value)} className={SELECT_CLASS + " max-w-[220px]"}>
+        <select value={sourceCat} onChange={e => setSourceCat(e.target.value as SourceCategory)} className={SELECT_CLASS}>
           <option value="">{t("donations.all_sources")}</option>
-          {sourceTypes.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="individual">{t("donations.cat_individual")}</option>
+          <option value="company">{t("donations.cat_company")}</option>
+          <option value="party">{t("donations.cat_party")}</option>
+          <option value="other">{t("donations.cat_other")}</option>
         </select>
         <select value={donorType} onChange={e => setDonorType(e.target.value)} className={SELECT_CLASS}>
           <option value="">{t("donations.all_donors")}</option>

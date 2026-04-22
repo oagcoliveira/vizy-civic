@@ -52,13 +52,14 @@ def run():
                     text("""
                         INSERT INTO core.politicians
                             (source, external_id, name, short_name, photo_url,
-                             gender, email, party_id, state, current_office, is_active)
+                             gender, email, cpf, party_id, state, current_office, is_active)
                         VALUES
                             ('camara', :eid, :name, :short_name, :photo,
-                             :gender, :email, :party_id, :state, 'deputado', TRUE)
+                             :gender, :email, :cpf, :party_id, :state, 'deputado', TRUE)
                         ON CONFLICT (source, external_id) DO UPDATE SET
                             name = EXCLUDED.name,
                             short_name = EXCLUDED.short_name,
+                            cpf = COALESCE(EXCLUDED.cpf, core.politicians.cpf),
                             party_id = EXCLUDED.party_id,
                             state = EXCLUDED.state,
                             photo_url = EXCLUDED.photo_url,
@@ -72,6 +73,7 @@ def run():
                         "photo": dep.get("urlFoto"),
                         "gender": detail.get("sexo"),
                         "email": detail.get("ultimoStatus", {}).get("email"),
+                        "cpf": detail.get("cpf"),
                         "party_id": party_id,
                         "state": dep.get("siglaUf"),
                     },

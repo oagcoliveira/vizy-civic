@@ -26,6 +26,7 @@ type Bill = {
   status: string | null;
   policy_area: string | null;
   author_label: string | null;
+  presented_at: string | null;
 };
 
 function statusColor(status: string | null) {
@@ -124,9 +125,10 @@ export default function ProposicoesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("bills.col_type")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">{t("bills.col_type")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("bills.col_bill")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48 hidden md:table-cell">{t("bills.col_author")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">{t("bills.col_date")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-40 hidden sm:table-cell">{t("bills.col_status")}</th>
               </tr>
             </thead>
@@ -151,6 +153,9 @@ export default function ProposicoesPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">
                     <span className="line-clamp-1">{b.author_label ?? "—"}</span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs hidden sm:table-cell whitespace-nowrap">
+                    {b.presented_at ? new Date(b.presented_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
                     {b.status ? (

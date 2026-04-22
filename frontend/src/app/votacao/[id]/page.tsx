@@ -10,6 +10,43 @@ import { useLanguage } from "@/contexts/LanguageContext";
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 600;
 
+const ORGAN_NAMES: Record<string, string> = {
+  PLEN:       "Plenário da Câmara",
+  MESA:       "Mesa Diretora",
+  SEMIPLEN:   "Semiplenário",
+  CCJC:       "Comissão de Constituição e Justiça e de Cidadania",
+  CCOM:       "Comissão de Comunicação",
+  CSPCCO:     "Comissão de Segurança Pública e Combate ao Crime Organizado",
+  CSAUDE:     "Comissão de Saúde",
+  CPD:        "Comissão de Previdência, Assistência Social, Infância, Juventude e Família",
+  CE:         "Comissão de Educação",
+  CAPADR:     "Comissão de Agricultura, Pecuária, Abastecimento e Desenvolvimento Rural",
+  CFFC:       "Comissão de Fiscalização Financeira e Controle",
+  CCULT:      "Comissão de Cultura",
+  CFT:        "Comissão de Finanças e Tributação",
+  CVT:        "Comissão de Viação e Transportes",
+  CPASF:      "Comissão de Previdência, Assistência Social, Infância, Juventude e Família",
+  CMADS:      "Comissão de Meio Ambiente e Desenvolvimento Sustentável",
+  CMULHER:    "Comissão de Defesa dos Direitos da Mulher",
+  CTRAB:      "Comissão de Trabalho",
+  CASP:       "Comissão de Administração e Serviço Público",
+  CDHMIR:     "Comissão de Direitos Humanos e Minorias",
+  CME:        "Comissão de Minas e Energia",
+  CESPO:      "Comissão de Esporte",
+  CLP:        "Comissão de Legislação Participativa",
+  CCP:        "Comissão de Ciência e Pesquisa",
+  CREDN:      "Comissão de Relações Exteriores e de Defesa Nacional",
+  CDU:        "Comissão de Desenvolvimento Urbano",
+  CIDOSO:     "Comissão do Idoso",
+  CDC:        "Comissão de Defesa do Consumidor",
+  CDE:        "Comissão de Desenvolvimento Econômico",
+  CPOVOS:     "Comissão dos Povos Indígenas e Tradicionais",
+  CINDRE:     "Comissão de Integração Nacional e Desenvolvimento Regional",
+  CTUR:       "Comissão de Turismo",
+  CCTI:       "Comissão de Ciência, Tecnologia e Inovação",
+  CMO:        "Comissão Mista de Orçamento",
+};
+
 type Bill = {
   id: number;
   title: string | null;
@@ -153,16 +190,28 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
           {resultBadge(votacao.result)}
           <span className="text-sm text-muted-foreground mt-1">{formatDate(votacao.voted_at)}</span>
           {votacao.session_label && (
-            <span className="text-sm text-muted-foreground mt-1">· {votacao.session_label}</span>
+            <span className="text-sm text-muted-foreground mt-1">
+              · {ORGAN_NAMES[votacao.session_label] ?? votacao.session_label}
+            </span>
+          )}
+          {votacao.vote_type === "nominal" && (
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200 mt-1">{t("vote.nominal_badge")}</Badge>
+          )}
+          {(!votacao.vote_type || votacao.vote_type === "none") && (
+            <Badge className="bg-gray-100 text-gray-600 border-gray-200 mt-1">{t("vote.no_votes_badge")}</Badge>
           )}
         </div>
         <h1 className="text-2xl font-bold mb-2">{billLabel}</h1>
-        {votacao.description && votacao.description !== billLabel && (
-          <p className="text-muted-foreground text-sm">{votacao.description}</p>
-        )}
         {/* Show full ementa for the primary bill if different from short_title */}
         {primaryBill?.ementa && primaryBill.ementa !== billLabel && (
           <p className="text-muted-foreground text-sm mt-2 italic">{primaryBill.ementa}</p>
+        )}
+        {/* Prominent description if it adds context beyond bill label */}
+        {votacao.description && votacao.description !== billLabel && votacao.description !== primaryBill?.ementa && (
+          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
+            <p className="text-xs font-semibold text-blue-700 mb-1">{t("vote.about_section")}</p>
+            <p className="text-sm text-blue-900">{votacao.description}</p>
+          </div>
         )}
         {/* Symbolic vote banner */}
         {votacao.vote_type === "symbolic" && (
@@ -190,49 +239,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Party breakdown */}
-      {individualVotes.length > 0 && (() => {
-        const partyMap: Record<string, { sim: number; nao: number; outros: number }> = {};
-        individualVotes.forEach((iv) => {
-          const p = iv.party_at_time ?? "—";
-          if (!partyMap[p]) partyMap[p] = { sim: 0, nao: 0, outros: 0 };
-          if (iv.vote === "Sim") partyMap[p].sim++;
-          else if (iv.vote === "Não") partyMap[p].nao++;
-          else partyMap[p].outros++;
-        });
-        const parties = Object.entries(partyMap).sort((a, b) => (b[1].sim + b[1].nao + b[1].outros) - (a[1].sim + a[1].nao + a[1].outros));
-        return (
-          <div className="mb-6">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              {t("vote.party_breakdown")}
-            </h2>
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">{t("vote.col_party")}</th>
-                    <th className="text-right px-4 py-2 font-medium text-green-700 w-20">Sim</th>
-                    <th className="text-right px-4 py-2 font-medium text-red-700 w-20">Não</th>
-                    <th className="text-right px-4 py-2 font-medium text-muted-foreground w-20">{t("vote.col_others")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {parties.map(([party, counts]) => (
-                    <tr key={party} className="hover:bg-muted/20">
-                      <td className="px-4 py-2 font-medium">{party}</td>
-                      <td className="px-4 py-2 text-right text-green-700">{counts.sim || "—"}</td>
-                      <td className="px-4 py-2 text-right text-red-700">{counts.nao || "—"}</td>
-                      <td className="px-4 py-2 text-right text-muted-foreground">{counts.outros || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Linked bills */}
+      {/* Linked bills — comes right after vote count grid */}
       {votacao.bills.length > 0 && (
         <div className="mb-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -259,6 +266,57 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
+
+      {/* Party breakdown — with % columns */}
+      {individualVotes.length > 0 && (() => {
+        const partyMap: Record<string, { sim: number; nao: number; outros: number }> = {};
+        individualVotes.forEach((iv) => {
+          const p = iv.party_at_time ?? "—";
+          if (!partyMap[p]) partyMap[p] = { sim: 0, nao: 0, outros: 0 };
+          if (iv.vote === "Sim") partyMap[p].sim++;
+          else if (iv.vote === "Não") partyMap[p].nao++;
+          else partyMap[p].outros++;
+        });
+        const parties = Object.entries(partyMap).sort((a, b) => (b[1].sim + b[1].nao + b[1].outros) - (a[1].sim + a[1].nao + a[1].outros));
+        return (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              {t("vote.party_breakdown")}
+            </h2>
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">{t("vote.col_party")}</th>
+                    <th className="text-right px-4 py-2 font-medium text-green-700">Sim</th>
+                    <th className="text-right px-4 py-2 font-medium text-green-600 text-xs w-14">%Sim</th>
+                    <th className="text-right px-4 py-2 font-medium text-red-700">Não</th>
+                    <th className="text-right px-4 py-2 font-medium text-red-600 text-xs w-14">%Não</th>
+                    <th className="text-right px-4 py-2 font-medium text-muted-foreground hidden sm:table-cell">{t("vote.col_others")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {parties.map(([party, counts]) => {
+                    const total = counts.sim + counts.nao + counts.outros;
+                    const pctSim = total > 0 ? Math.round((counts.sim / total) * 100) : 0;
+                    const pctNao = total > 0 ? Math.round((counts.nao / total) * 100) : 0;
+                    return (
+                      <tr key={party} className="hover:bg-muted/20">
+                        <td className="px-4 py-2 font-medium">{party}</td>
+                        <td className="px-4 py-2 text-right text-green-700">{counts.sim || "—"}</td>
+                        <td className="px-4 py-2 text-right text-green-600 text-xs">{counts.sim > 0 ? `${pctSim}%` : "—"}</td>
+                        <td className="px-4 py-2 text-right text-red-700">{counts.nao || "—"}</td>
+                        <td className="px-4 py-2 text-right text-red-600 text-xs">{counts.nao > 0 ? `${pctNao}%` : "—"}</td>
+                        <td className="px-4 py-2 text-right text-muted-foreground hidden sm:table-cell">{counts.outros || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Individual votes */}
       {totalVotes > 0 && (

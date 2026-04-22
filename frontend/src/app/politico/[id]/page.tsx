@@ -370,28 +370,24 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
           ? <EmptyState message={t("politician.empty_speeches")} />
           : <div className="space-y-3">
               {speeches.map((s) => (
-                <Card key={s.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <span className="text-xs text-muted-foreground">
-                        {s.delivered_at ? new Date(s.delivered_at).toLocaleDateString("pt-BR") : "—"}
-                        {s.phase && ` · ${s.phase}`}
-                      </span>
-                      {s.full_text_url && (
-                        <a href={s.full_text_url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline flex-shrink-0">
-                          {t("politician.read_full")}
-                        </a>
-                      )}
-                    </div>
-                    <p className="text-sm">{s.summary ?? t("politician.no_summary")}</p>
-                    {s.keywords && s.keywords.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {s.keywords.map((k) => <Badge key={k} variant="secondary">{k}</Badge>)}
+                <Link key={s.id} href={`/discurso/${s.id}`}>
+                  <Card className="hover:border-primary/40 hover:bg-muted/20 transition-all cursor-pointer">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <span className="text-xs text-muted-foreground">
+                          {s.delivered_at ? new Date(s.delivered_at).toLocaleDateString("pt-BR") : "—"}
+                          {s.phase && ` · ${s.phase}`}
+                        </span>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      <p className="text-sm">{s.summary ?? t("politician.no_summary")}</p>
+                      {s.keywords && s.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {s.keywords.slice(0, 4).map((k) => <Badge key={k} variant="secondary" className="text-xs">{k}</Badge>)}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
       )}

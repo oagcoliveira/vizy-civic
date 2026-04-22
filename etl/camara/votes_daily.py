@@ -51,14 +51,12 @@ def run():
         # Phase 2: upsert all votações (committed immediately)
         with engine.begin() as conn:
             for v in votacoes:
-                tipo = v.get("tipoVotacao") or ""
-                vote_type = "symbolic" if "simbólic" in tipo.lower() else None
                 row = {
                     "source": "camara",
                     "external_id": str(v["id"]),
                     "description": v.get("descricao"),
                     "voted_at": v.get("dataHoraRegistro"),  # correct field name from API
-                    "vote_type": vote_type,  # 'symbolic' if known; set to 'nominal'/'none' later
+                    "vote_type": None,  # determined in phase 3
                     "result": v.get("aprovacao"),
                     "session_label": v.get("siglaOrgao"),
                 }
@@ -81,18 +79,37 @@ def run():
                 else:
                     updated += 1
 
-        # Phase 3: individual votes — only plenário non-symbolic votações have nominal votes
+        # Phase 3: individual votes — only plenário votações may have nominal records
+        # tipoVotacao is unreliable from the API; we determine symbolic vs nominal
+        # by whether the /votos endpoint returns data (symbolic = no individual votes)
         plen_ids = [
             str(v["id"]) for v in votacoes
             if v.get("siglaOrgao") == "PLEN"
-            and "simbólic" not in (v.get("tipoVotacao") or "").lower()
         ]
+        # Non-PLEN (committee) votes never have individual records
+        non_plen_ids = [
+            str(v["id"]) for v in votacoes
+            if v.get("siglaOrgao") != "PLEN"
+        ]
+        print(f"[{JOB_NAME}] Fetching proposicoes for {len(non_plen_ids)} committee votações...", flush=True)
+        for i, vid in enumerate(non_plen_ids, 1):
+            with engine.begin() as conn:
+                row = conn.execute(
+                    text("UPDATE core.votacoes SET vote_type = 'none' WHERE source = 'camara' AND external_id = :eid AND vote_type IS NULL RETURNING id"),
+                    {"eid": vid},
+                ).fetchone()
+                votacao_id = row[0] if row else conn.execute(
+                    text("SELECT id FROM core.votacoes WHERE source = 'camara' AND external_id = :eid"),
+                    {"eid": vid},
+                ).scalar()
+                if votacao_id:
+                    _upsert_proposicoes(conn, votacao_id, vid)
         print(f"[{JOB_NAME}] Fetching individual votes for {len(plen_ids)} plenário votações...", flush=True)
         for i, vid in enumerate(plen_ids, 1):
             if i % 50 == 0 or i == 1:
                 print(f"[{JOB_NAME}]   individual votes: {i}/{len(plen_ids)}", flush=True)
             with engine.begin() as conn:
-                _upsert_individual_votes(conn, vid)
+                _upsert_individual_votes(conn, vid, is_plen=True)
 
         log_run(JOB_NAME, "success", fetched, inserted, updated, params={"since": since})
         print(f"[{JOB_NAME}] Done — {fetched} fetched, {inserted} inserted, {updated} updated")
@@ -156,17 +173,27 @@ def _upsert_proposicoes(conn, votacao_id: int, votacao_external_id: str):
             )
 
 
-def _upsert_individual_votes(conn, votacao_external_id: str):
+def _upsert_individual_votes(conn, votacao_external_id: str, is_plen: bool = False):
     try:
         votos = get(f"/votacoes/{votacao_external_id}/votos").get("dados", [])
     except Exception:
         votos = []  # 404 or other error — treat as no individual vote data
     if not votos:
-        # Mark as checked so reruns skip it
+        # PLEN vote with no individual records = symbolic vote
+        # Non-PLEN vote with no individual records = committee/procedural vote
+        new_type = "symbolic" if is_plen else "none"
         conn.execute(
-            text("UPDATE core.votacoes SET vote_type = 'none' WHERE source = 'camara' AND external_id = :eid AND vote_type IS NULL"),
-            {"eid": str(votacao_external_id)},
+            text("UPDATE core.votacoes SET vote_type = :vt WHERE source = 'camara' AND external_id = :eid AND vote_type IS NULL"),
+            {"eid": str(votacao_external_id), "vt": new_type},
         )
+        # Still fetch linked bills for symbolic PLEN votes
+        if is_plen:
+            votacao_id_row = conn.execute(
+                text("SELECT id FROM core.votacoes WHERE source = 'camara' AND external_id = :eid"),
+                {"eid": str(votacao_external_id)},
+            ).fetchone()
+            if votacao_id_row:
+                _upsert_proposicoes(conn, votacao_id_row[0], str(votacao_external_id))
         return
 
     try:

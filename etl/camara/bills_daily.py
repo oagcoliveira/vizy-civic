@@ -157,9 +157,18 @@ def run(limit: int | None = None):
     # Backfill author IDs for existing bills (idempotent — only updates NULL rows)
     backfill_author_ids()
 
-    # Fetch bills that haven't been enriched yet (status IS NULL = not fetched from detail API)
+    # Only enrich substantive bill types — other types (REQ, EMC, PAR, etc.) are stored
+    # but not enriched unless explicitly requested later.
+    ENRICH_TYPES = ("PL", "PLP", "PEC", "MPV", "PDL", "PRC", "MSC", "TVR", "PLN", "PDC")
+
     with engine.connect() as conn:
-        query = "SELECT id, external_id, type, number, year, title, ementa FROM core.bills WHERE source = 'camara' AND (status IS NULL OR short_title IS NULL OR policy_area IS NULL) ORDER BY id"
+        query = f"""
+            SELECT id, external_id, type, number, year, title, ementa FROM core.bills
+            WHERE source = 'camara'
+              AND type IN {ENRICH_TYPES}
+              AND (status IS NULL OR short_title IS NULL OR policy_area IS NULL)
+            ORDER BY id
+        """
         if limit:
             query += f" LIMIT {limit}"
         rows = conn.execute(text(query)).fetchall()

@@ -52,7 +52,7 @@ def list_bills(
     rows = db.execute(text(f"""
         SELECT id, source, external_id, type, number, year, title, ementa,
                short_title, summary, status, policy_area, policy_tags,
-               author_label, full_text_url, updated_at
+               author_label, full_text_url, presented_at, updated_at
         FROM core.bills
         WHERE {where_clause}
         ORDER BY year DESC NULLS LAST, number DESC NULLS LAST

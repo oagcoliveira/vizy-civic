@@ -6,20 +6,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import dotenv_values
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.database import engine
-from app.routers import auth, politicians, bills, votes, donations, feed, search, parties
+from app.routers import auth, politicians, bills, votes, donations, feed, search, parties, speeches
 
 # Read .env files directly so subprocesses get the right values
 # (pydantic-settings loads into settings object, not os.environ)
 _BACKEND_ENV = dotenv_values(Path(__file__).parent.parent / ".env")
 _ETL_ENV = dotenv_values(Path(__file__).parent.parent.parent / "etl" / ".env")
 
-# Path to the etl/ directory (two levels up from backend/app/)
-ETL_DIR = Path(__file__).parent.parent.parent / "etl"
+# Path to the etl/ directory.
+# In the production container: /app/etl (one level up from /app/app/)
+# Locally: ../etl relative to backend/ (three levels up doesn't work, so we use env override)
+ETL_DIR = Path(os.environ.get("ETL_DIR", str(Path(__file__).parent.parent / "etl")))
 
 # Map of ETL job names → Python module paths (run as `python -m <module>` in ETL_DIR)
 ETL_JOBS = {
@@ -59,7 +61,7 @@ def _run_stale_etl_jobs():
         return
     for job_name, module in ETL_JOBS.items():
         hours = _hours_since_last_run(job_name)
-        if hours is None or hours > 24:
+        if hours is None or hours > 12:
             age = f"{hours:.1f}h ago" if hours is not None else "never"
             print(f"[ETL auto-refresh] Running {job_name} (last success: {age})")
             try:
@@ -93,9 +95,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_allowed_origins = [
+    o.strip() for o in
+    os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:3002").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,6 +116,7 @@ app.include_router(donations.router, prefix="/donations", tags=["donations"])
 app.include_router(feed.router, prefix="/feed", tags=["feed"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(parties.router, prefix="/parties", tags=["parties"])
+app.include_router(speeches.router, prefix="/speeches", tags=["speeches"])
 
 
 @app.get("/health")
@@ -117,9 +125,11 @@ def health():
 
 
 @app.post("/admin/refresh", tags=["admin"])
-def manual_refresh(background_tasks: BackgroundTasks):
+def manual_refresh(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
     """Trigger ETL jobs immediately, regardless of last run time.
-    Runs in the background — returns instantly."""
+    Requires X-Admin-Key header matching ADMIN_API_KEY env var."""
+    if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
     background_tasks.add_task(_force_run_all_etl)
     return {"status": "refresh started", "jobs": list(ETL_JOBS.keys())}
 

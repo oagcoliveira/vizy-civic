@@ -1,19 +1,27 @@
 """
-One-off load: TSE campaign donation data via Base dos Dados (BigQuery).
+Load TSE donation data from Manus-produced CSVs into PostgreSQL.
 
-Queries br_tse_eleicoes.receitas_candidato for federal candidates (2018, 2022),
-saves to CSV, then bulk-loads into tse.donors and tse.donations.
+Imports ALL donations regardless of whether the candidate has a politician
+record in core.politicians. politician_id is set where a CPF match exists
+and left NULL otherwise (historical candidates not in current legislature).
 
-Prerequisites:
-  - GCP project with billing enabled (BigQuery free tier: 1TB/month)
-  - GOOGLE_APPLICATION_CREDENTIALS env var pointing to service account JSON
-  - BIGQUERY_PROJECT_ID env var
+Expects:
+  vizy_donors_all_years.csv    — deduplicated donors
+  vizy_donations_all_years.csv — all donation records with cpf_candidato
 
 Usage:
-    python -m tse.donations_load
+    cd etl
+    python -m tse.donations_load \
+        --donors   ../manus/vizy_donors_all_years.csv \
+        --donations ../manus/vizy_donations_all_years.csv
+
+Prerequisites:
+  - Migrations 005 and 006 applied
+  - politicians_weekly run (to populate core.politicians.cpf for matching)
 """
 
-import os
+import argparse
+import re
 import sys
 
 import pandas as pd
@@ -21,112 +29,136 @@ from sqlalchemy import text
 
 from db import engine
 
-BILLING_PROJECT = os.environ.get("BIGQUERY_PROJECT_ID", "vizy-bigquery")
+CHUNK = 5000  # rows per bulk insert
 
 
-def fetch_from_bigquery() -> pd.DataFrame:
-    import basedosdados as bd
+def load_donors(donors_csv: str) -> dict[str, int]:
+    """Bulk-upsert donors. Returns {cpf_cnpj_raw: donor_id} map."""
+    df = pd.read_csv(donors_csv, dtype=str)
+    df = df.where(pd.notna(df), None)
+    total = len(df)
+    print(f"[donations_load] Loading {total:,} donors from {donors_csv}")
 
-    print("[tse.donations_load] Querying Base dos Dados BigQuery...")
-    df = bd.read_sql(
-        """
-        SELECT
-            ano_eleicao,
-            sigla_uf,
-            cpf_candidato,
-            nome_candidato,
-            sigla_partido,
-            cpf_cnpj_doador,
-            nome_doador,
-            valor_receita,
-            fonte_receita,
-            tipo_receita,
-            data_receita,
-            descricao_cargo
-        FROM `basedosdados.br_tse_eleicoes.receitas_candidato`
-        WHERE ano_eleicao IN (2022, 2018)
-          AND descricao_cargo IN ('DEPUTADO FEDERAL', 'SENADOR')
-        """,
-        billing_project_id=BILLING_PROJECT,
-    )
-    print(f"[tse.donations_load] Fetched {len(df):,} rows from BigQuery")
-    return df
-
-
-def load_to_postgres(df: pd.DataFrame):
-    print("[tse.donations_load] Loading into PostgreSQL...")
-    inserted_donors = inserted_donations = 0
+    cpf_to_id: dict[str, int] = {}
 
     with engine.begin() as conn:
-        for _, row in df.iterrows():
-            # Upsert donor (mask CPF/CNPJ for display)
-            cpf_raw = str(row.get("cpf_cnpj_doador", ""))
-            cpf_masked = _mask_cpf(cpf_raw)
-            donor_type = "company" if len(cpf_raw.replace(".", "").replace("-", "").replace("/", "")) == 14 else "individual"
+        for start in range(0, total, CHUNK):
+            chunk = df.iloc[start:start + CHUNK]
+            for _, row in chunk.iterrows():
+                cpf_raw = row.get("cpf_cnpj_raw")
+                result = conn.execute(
+                    text("""
+                        INSERT INTO tse.donors
+                            (cpf_cnpj_raw, cpf_cnpj_masked, name, donor_type, state)
+                        VALUES (:raw, :masked, :name, :dtype, :state)
+                        ON CONFLICT (cpf_cnpj_raw) WHERE cpf_cnpj_raw IS NOT NULL DO UPDATE
+                            SET name = EXCLUDED.name
+                        RETURNING id
+                    """),
+                    {
+                        "raw":    cpf_raw,
+                        "masked": row.get("cpf_cnpj_masked"),
+                        "name":   row.get("name") or "Desconhecido",
+                        "dtype":  row.get("donor_type", "individual"),
+                        "state":  row.get("state"),
+                    },
+                ).fetchone()
+                if result and cpf_raw:
+                    cpf_to_id[cpf_raw] = result[0]
 
-            donor = conn.execute(
-                text("""
-                    INSERT INTO tse.donors (cpf_cnpj_masked, name, donor_type, state)
-                    VALUES (:masked, :name, :type, :state)
-                    ON CONFLICT DO NOTHING
-                    RETURNING id
-                """),
-                {"masked": cpf_masked, "name": row.get("nome_doador", ""), "type": donor_type, "state": row.get("sigla_uf")},
-            ).fetchone()
-            if donor:
-                donor_id = donor[0]
-                inserted_donors += 1
-            else:
-                donor_id = conn.execute(
-                    text("SELECT id FROM tse.donors WHERE cpf_cnpj_masked = :m AND name = :n"),
-                    {"m": cpf_masked, "n": row.get("nome_doador", "")},
-                ).fetchone()[0]
+            pct = min(start + CHUNK, total)
+            print(f"  donors {pct:,}/{total:,}", end="\r", flush=True)
 
-            # Link to politician via CPF
-            politician = conn.execute(
-                text("SELECT id FROM core.politicians WHERE cpf = :cpf"),
-                {"cpf": str(row.get("cpf_candidato", ""))},
-            ).fetchone()
-            if not politician:
-                continue
-
-            conn.execute(
-                text("""
-                    INSERT INTO tse.donations
-                        (donor_id, politician_id, election_year, amount_brl,
-                         receipt_date, source_type, office_sought, state)
-                    VALUES
-                        (:donor_id, :politician_id, :year, :amount,
-                         :date, :source_type, :office, :state)
-                    ON CONFLICT DO NOTHING
-                """),
-                {
-                    "donor_id": donor_id,
-                    "politician_id": politician[0],
-                    "year": int(row["ano_eleicao"]),
-                    "amount": float(row.get("valor_receita", 0)),
-                    "date": row.get("data_receita"),
-                    "source_type": row.get("fonte_receita"),
-                    "office": row.get("descricao_cargo"),
-                    "state": row.get("sigla_uf"),
-                },
-            )
-            inserted_donations += 1
-
-    print(f"[tse.donations_load] Done — {inserted_donors} donors, {inserted_donations} donations inserted")
+    print(f"\n[donations_load] Donors done — {len(cpf_to_id):,} mapped")
+    return cpf_to_id
 
 
-def _mask_cpf(cpf: str) -> str:
-    digits = cpf.replace(".", "").replace("-", "").replace("/", "")
-    if len(digits) == 11:
-        return f"***.***.***-{digits[-2:]}"
-    if len(digits) == 14:
-        return f"**.***.***/****-{digits[-2:]}"
-    return "***"
+def load_donations(donations_csv: str, cpf_to_donor_id: dict[str, int]):
+    """Bulk-insert all donations. Matches politician by CPF where possible."""
+    df = pd.read_csv(donations_csv, dtype=str)
+    df = df.where(pd.notna(df), None)
+    total = len(df)
+    print(f"[donations_load] Loading {total:,} donations from {donations_csv}")
+
+    with engine.begin() as conn:
+        # Build CPF → politician_id map (digits-only keys for format-agnostic matching)
+        # Câmara API stores CPF as raw digits; TSE data stores formatted (XXX.XXX.XXX-XX)
+        rows = conn.execute(
+            text("SELECT cpf, id FROM core.politicians WHERE cpf IS NOT NULL")
+        ).fetchall()
+        cpf_to_politician = {r[0]: r[1] for r in rows}  # digits-only keys
+        print(f"[donations_load] Politicians with CPF: {len(cpf_to_politician):,}")
+
+    inserted = matched = no_donor = 0
+
+    with engine.begin() as conn:
+        for start in range(0, total, CHUNK):
+            chunk = df.iloc[start:start + CHUNK]
+            params = []
+            for _, row in chunk.iterrows():
+                cpf_donor = row.get("cpf_cnpj_raw_donor")
+                cpf_cand  = row.get("cpf_candidato") or None
+
+                donor_id = cpf_to_donor_id.get(cpf_donor)
+                if not donor_id:
+                    no_donor += 1
+                    continue
+
+                # Normalize CPF to digits-only for matching (TSE uses formatted, Câmara uses raw digits)
+                cpf_cand_digits = re.sub(r"\D", "", cpf_cand) if cpf_cand else None
+                politician_id = cpf_to_politician.get(cpf_cand_digits) if cpf_cand_digits else None
+                if politician_id:
+                    matched += 1
+
+                try:
+                    amount = float(row.get("amount_brl") or 0)
+                except (ValueError, TypeError):
+                    amount = 0.0
+
+                params.append({
+                    "donor_id":       donor_id,
+                    "politician_id":  politician_id,   # NULL if no match — that's OK
+                    "cpf_candidato":  cpf_cand,
+                    "election_year":  int(row["election_year"]),
+                    "amount_brl":     amount,
+                    "date":           row.get("receipt_date") or None,
+                    "source_type":    row.get("source_type"),
+                    "office":         row.get("office_sought"),
+                    "state":          row.get("state"),
+                })
+
+            if params:
+                conn.execute(
+                    text("""
+                        INSERT INTO tse.donations
+                            (donor_id, politician_id, cpf_candidato, election_year,
+                             amount_brl, receipt_date, source_type, office_sought, state)
+                        VALUES
+                            (:donor_id, :politician_id, :cpf_candidato, :election_year,
+                             :amount_brl, :date, :source_type, :office, :state)
+                        ON CONFLICT DO NOTHING
+                    """),
+                    params,
+                )
+                inserted += len(params)
+
+            pct = min(start + CHUNK, total)
+            print(f"  donations {pct:,}/{total:,} | matched={matched:,} | no_donor={no_donor:,}",
+                  end="\r", flush=True)
+
+    print(f"\n[donations_load] Done — {inserted:,} inserted, "
+          f"{matched:,} matched to a politician, "
+          f"{no_donor:,} skipped (donor not in donors file)")
+
+
+def run(donors_csv: str, donations_csv: str):
+    cpf_to_donor_id = load_donors(donors_csv)
+    load_donations(donations_csv, cpf_to_donor_id)
 
 
 if __name__ == "__main__":
-    df = fetch_from_bigquery()
-    df.to_csv("donations_raw.csv", index=False)
-    print("[tse.donations_load] Saved to donations_raw.csv")
-    load_to_postgres(df)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--donors",    required=True)
+    parser.add_argument("--donations", required=True)
+    args = parser.parse_args()
+    run(args.donors, args.donations)

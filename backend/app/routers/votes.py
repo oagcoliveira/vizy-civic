@@ -12,6 +12,8 @@ def list_votacoes(
     source: str | None = Query(None),
     vote_type: str | None = Query(None),
     result: str | None = Query(None),
+    session_label: str | None = Query(None),
+    bill_type: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, le=100),
     db: Session = Depends(get_db),
@@ -28,6 +30,21 @@ def list_votacoes(
     if result:
         where.append("v.result = :result")
         params["result"] = result
+    if session_label == "__outros__":
+        # Exclude all sessions with >= 600 votes — show only the long-tail ones
+        where.append("""
+            v.session_label NOT IN (
+                SELECT session_label FROM core.votacoes
+                WHERE session_label IS NOT NULL
+                GROUP BY session_label HAVING COUNT(*) >= 600
+            )
+        """)
+    elif session_label:
+        where.append("v.session_label = :session_label")
+        params["session_label"] = session_label
+    if bill_type:
+        where.append("b.type = :bill_type")
+        params["bill_type"] = bill_type
 
     where_clause = " AND ".join(where)
 
@@ -45,10 +62,38 @@ def list_votacoes(
     """), params).fetchall()
 
     total = db.execute(text(f"""
-        SELECT count(*) FROM core.votacoes v WHERE {where_clause}
+        SELECT count(*) FROM core.votacoes v
+        LEFT JOIN core.votacao_bills vb ON vb.votacao_id = v.id AND vb.is_primary = TRUE
+        LEFT JOIN core.bills b ON b.id = vb.bill_id
+        WHERE {where_clause}
     """), params).scalar()
 
     return {"total": total, "page": page, "items": [dict(r._mapping) for r in rows]}
+
+
+@router.get("/filter-options")
+def get_filter_options(db: Session = Depends(get_db)):
+    """Returns available session labels and bill types for filter dropdowns."""
+    labels = db.execute(text("""
+        SELECT session_label, COUNT(*) as c
+        FROM core.votacoes
+        WHERE session_label IS NOT NULL
+        GROUP BY session_label ORDER BY c DESC
+    """)).fetchall()
+    bill_types = db.execute(text("""
+        SELECT DISTINCT b.type
+        FROM core.bills b
+        JOIN core.votacao_bills vb ON vb.bill_id = b.id
+        WHERE b.type IS NOT NULL
+        ORDER BY b.type
+    """)).fetchall()
+    main = [r[0] for r in labels if r[1] >= 600]
+    outros_count = sum(r[1] for r in labels if r[1] < 600)
+    return {
+        "session_labels": main,
+        "session_labels_outros_count": outros_count,
+        "bill_types": [r[0] for r in bill_types],
+    }
 
 
 @router.get("/{votacao_id}")

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -13,8 +13,15 @@ from app.database import get_db
 from app.models.auth import BillTrack, PoliticianFollow, User
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 ALGORITHM = "HS256"
 
@@ -54,7 +61,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     user = User(
         email=data.email,
         name=data.name,
-        password_hash=pwd_context.hash(data.password),
+        password_hash=_hash_password(data.password),
     )
     db.add(user)
     db.commit()
@@ -65,7 +72,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 @router.post("/token", response_model=Token)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == form.username).first()
-    if not user or not pwd_context.verify(form.password, user.password_hash):
+    if not user or not _verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     user.last_login_at = datetime.utcnow()
     db.commit()

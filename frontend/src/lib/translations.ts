@@ -101,6 +101,7 @@ const pt = {
   "bills.col_type":      "Tipo",
   "bills.col_bill":      "Proposição",
   "bills.col_author":    "Autor",
+  "bills.col_date":      "Apresentação",
   "bills.col_status":    "Status",
   "bills.no_title":      "Sem título",
 
@@ -136,6 +137,11 @@ const pt = {
   "votes.disclaimer":    "Apenas votações nominais são registradas individualmente. Votações simbólicas não têm registro por parlamentar.",
   "votes.badge_approved": "Aprovada",
   "votes.badge_rejected": "Rejeitada",
+  "votes.all_types":        "Todos os tipos",
+  "votes.all_commissions":  "Todas as comissões",
+  "votes.all_bill_types":   "Todos os tipos de proposição",
+  "votes.help_commissions": "Siglas das comissões",
+  "votes.help_bill_types":  "Tipos de proposição",
 
   // ── Vote detail ──────────────────────────────────────────────────────────────
   "vote.back":           "← Base de Votações",
@@ -157,6 +163,9 @@ const pt = {
   "vote.back_long":      "← Voltar à base de votações",
   "vote.symbolic_badge": "Votação Simbólica",
   "vote.symbolic_note":  "Votações simbólicas não têm registro individual por parlamentar — apenas o resultado final é disponibilizado.",
+  "vote.nominal_badge":  "Votação Nominal",
+  "vote.no_votes_badge": "Sem registro individual",
+  "vote.about_section":  "Sobre esta votação",
 
   // ── Donations ────────────────────────────────────────────────────────────────
   "donations.title":           "Doações de Campanha",
@@ -165,6 +174,10 @@ const pt = {
   "donations.all_parties":     "Todos os partidos",
   "donations.all_states":      "Todos os estados",
   "donations.all_sources":     "Todas as fontes",
+  "donations.cat_individual":  "Pessoa física",
+  "donations.cat_company":     "Pessoa jurídica",
+  "donations.cat_party":       "Fundo/Partido",
+  "donations.cat_other":       "Outros",
   "donations.all_donors":      "Todos os doadores",
   "donations.donor_individual":"Pessoa física",
   "donations.donor_company":   "Pessoa jurídica",
@@ -189,9 +202,14 @@ const pt = {
   "donations.col_politicians": "Políticos",
 
   // ── Search ───────────────────────────────────────────────────────────────────
-  "search.title":       "Busca",
-  "search.placeholder": "Busque por parlamentar, projeto de lei ou discurso...",
-  "search.searching":   'Buscando por "{query}"...',
+  "search.title":             "Busca",
+  "search.placeholder":       "Busque por parlamentar, projeto de lei ou discurso...",
+  "search.searching":         'Buscando por "{query}"...',
+  "search.no_results":        'Nenhum resultado para "{query}"',
+  "search.section_politicians": "Parlamentares",
+  "search.section_bills":     "Proposições",
+  "search.section_speeches":  "Discursos",
+  "search.coverage_note":     "A busca cobre parlamentares, proposições e discursos. Votações individuais não são indexadas.",
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   "login.title":        "Entrar no Vizy",
@@ -206,6 +224,8 @@ const pt = {
   "signup.email":       "E-mail",
   "signup.password":    "Senha",
   "signup.submit":      "Criar conta",
+  "signup.submitting":  "Criando conta…",
+  "signup.success":     "Conta criada! Redirecionando…",
   "signup.has_account": "Já tem conta?",
   "signup.login_link":  "Entrar",
 
@@ -331,6 +351,7 @@ const en: typeof pt = {
   "bills.col_type":      "Type",
   "bills.col_bill":      "Bill",
   "bills.col_author":    "Author",
+  "bills.col_date":      "Introduced",
   "bills.col_status":    "Status",
   "bills.no_title":      "Untitled",
 
@@ -366,6 +387,11 @@ const en: typeof pt = {
   "votes.disclaimer":    "Only roll-call votes have individual records. Voice votes do not have per-lawmaker records.",
   "votes.badge_approved": "Passed",
   "votes.badge_rejected": "Rejected",
+  "votes.all_types":        "All types",
+  "votes.all_commissions":  "All committees",
+  "votes.all_bill_types":   "All bill types",
+  "votes.help_commissions": "Committee acronyms",
+  "votes.help_bill_types":  "Bill types",
 
   // ── Vote detail ──────────────────────────────────────────────────────────────
   "vote.back":           "← Votes database",
@@ -387,6 +413,9 @@ const en: typeof pt = {
   "vote.back_long":      "← Back to votes database",
   "vote.symbolic_badge": "Voice Vote",
   "vote.symbolic_note":  "Voice votes do not have per-lawmaker records — only the final result is available.",
+  "vote.nominal_badge":  "Nominal Vote",
+  "vote.no_votes_badge": "No individual records",
+  "vote.about_section":  "About this vote",
 
   // ── Donations ────────────────────────────────────────────────────────────────
   "donations.title":           "Campaign Donations",
@@ -395,6 +424,10 @@ const en: typeof pt = {
   "donations.all_parties":     "All parties",
   "donations.all_states":      "All states",
   "donations.all_sources":     "All sources",
+  "donations.cat_individual":  "Individuals",
+  "donations.cat_company":     "Companies",
+  "donations.cat_party":       "Party funds",
+  "donations.cat_other":       "Other",
   "donations.all_donors":      "All donor types",
   "donations.donor_individual":"Individual",
   "donations.donor_company":   "Company",
@@ -419,9 +452,14 @@ const en: typeof pt = {
   "donations.col_politicians": "Politicians",
 
   // ── Search ───────────────────────────────────────────────────────────────────
-  "search.title":       "Search",
-  "search.placeholder": "Search lawmakers, bills, speeches...",
-  "search.searching":   'Searching for "{query}"...',
+  "search.title":             "Search",
+  "search.placeholder":       "Search lawmakers, bills, speeches...",
+  "search.searching":         'Searching for "{query}"...',
+  "search.no_results":        'No results for "{query}"',
+  "search.section_politicians": "Lawmakers",
+  "search.section_bills":     "Bills",
+  "search.section_speeches":  "Speeches",
+  "search.coverage_note":     "Search covers lawmakers, bills, and speeches. Individual votes are not indexed.",
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   "login.title":        "Log in to Vizy",
@@ -436,6 +474,8 @@ const en: typeof pt = {
   "signup.email":       "Email",
   "signup.password":    "Password",
   "signup.submit":      "Create account",
+  "signup.submitting":  "Creating account…",
+  "signup.success":     "Account created! Redirecting…",
   "signup.has_account": "Already have an account?",
   "signup.login_link":  "Log in",
 

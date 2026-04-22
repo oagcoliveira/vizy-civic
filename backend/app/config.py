@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "noreply@vizy.com.br"
     secret_key: str = "change-me-in-production"
+    admin_api_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 10080  # 7 days
 
     class Config:

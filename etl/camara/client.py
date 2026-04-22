@@ -50,7 +50,7 @@ def paginate(path: str, params: dict | None = None, label: str = "") -> list[dic
         items = data.get("dados", [])
         results.extend(items)
         if params["pagina"] > 1 or len(items) == 100:
-            print(f"    page {params['pagina']} → {len(results)} items{' ' + label if label else ''}", flush=True)
+            print(f"    page {params['pagina']} -> {len(results)} items{' ' + label if label else ''}", flush=True)
         if len(items) < 100:
             break
         params["pagina"] += 1

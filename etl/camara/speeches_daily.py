@@ -8,6 +8,7 @@ Usage:
 """
 
 import sys
+import argparse
 from datetime import date
 
 from sqlalchemy import text
@@ -18,8 +19,8 @@ from camara.client import paginate, get
 JOB_NAME = "camara_speeches_daily"
 
 
-def run():
-    since = last_successful_run(JOB_NAME) or date.today().strftime("%Y-%m-01")
+def run(since_override: str | None = None):
+    since = since_override or last_successful_run(JOB_NAME) or date.today().strftime("%Y-%m-01")
     today = date.today().isoformat()
     print(f"[{JOB_NAME}] Fetching speeches from {since} to {today}")
 
@@ -41,12 +42,18 @@ def run():
             with engine.begin() as conn:
                 for s in speeches:
                     external_id = s.get("dataHoraInicio", "") + str(dep_ext_id)
+                    # Parse keywords from comma-separated string
+                    kw_raw = s.get("keywords") or ""
+                    keywords = [k.strip() for k in kw_raw.split(",") if k.strip()] or None
                     res = conn.execute(
                         text("""
                             INSERT INTO core.speeches
-                                (source, external_id, politician_id, delivered_at, phase, full_text_url)
-                            VALUES ('camara', :eid, :pid, :at, :phase, :url)
-                            ON CONFLICT (source, external_id) DO NOTHING
+                                (source, external_id, politician_id, delivered_at, phase, summary, keywords, full_text_url)
+                            VALUES ('camara', :eid, :pid, :at, :phase, :summary, :keywords, :url)
+                            ON CONFLICT (source, external_id) DO UPDATE SET
+                                summary = COALESCE(EXCLUDED.summary, core.speeches.summary),
+                                keywords = COALESCE(EXCLUDED.keywords, core.speeches.keywords),
+                                full_text_url = COALESCE(EXCLUDED.full_text_url, core.speeches.full_text_url)
                             RETURNING id
                         """),
                         {
@@ -54,6 +61,8 @@ def run():
                             "pid": dep_id,
                             "at": s.get("dataHoraInicio"),
                             "phase": s.get("faseEvento", {}).get("titulo"),
+                            "summary": s.get("sumario") or None,
+                            "keywords": keywords,
                             "url": s.get("urlTexto"),
                         },
                     )
@@ -70,4 +79,7 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--since", type=str, default=None, help="Fetch speeches from this date (YYYY-MM-DD). Overrides last successful run date.")
+    args = parser.parse_args()
+    run(since_override=args.since)
