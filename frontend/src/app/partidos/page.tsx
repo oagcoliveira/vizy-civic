@@ -24,10 +24,10 @@ const COLORS = [
 ];
 
 function renderCustomLabel({
-  cx, cy, midAngle, innerRadius, outerRadius, percent,
+  cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, percent = 0,
 }: {
-  cx: number; cy: number; midAngle: number;
-  innerRadius: number; outerRadius: number; percent: number;
+  cx?: number; cy?: number; midAngle?: number;
+  innerRadius?: number; outerRadius?: number; percent?: number;
 }) {
   if (percent < 0.04) return null;
   const RADIAN = Math.PI / 180;
