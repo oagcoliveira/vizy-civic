@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { DonorModal } from "@/components/DonorModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const YEARS = [2010, 2014, 2018, 2022];
@@ -153,6 +154,7 @@ export default function DoacoesPage() {
   const [politicianId, setPoliticianId] = useState("");
 
   const [parties, setParties]         = useState<Party[]>([]);
+  const [activeDonor, setActiveDonor]  = useState<{ id: number; name: string } | null>(null);
 
   const [summary,      setSummary]      = useState<Summary | null>(null);
   const [byYearRaw,    setByYearRaw]    = useState<YearSourceRow[]>([]);
@@ -382,18 +384,21 @@ export default function DoacoesPage() {
                   <tr key={d.id} className="hover:bg-muted/30">
                     <td className="py-2 pr-2 text-muted-foreground text-xs">{i + 1}</td>
                     <td className="py-2">
-                      <div className="flex items-center gap-2">
+                      <button
+                        className="flex items-center gap-2 text-left w-full hover:text-primary transition-colors"
+                        onClick={() => setActiveDonor({ id: d.id, name: d.name })}
+                      >
                         <Badge variant={d.donor_type === "company" ? "secondary" : "outline"}
                                className="text-xs shrink-0">
                           {d.donor_type === "company" ? "PJ" : d.donor_type === "individual" ? "PF" : "?"}
                         </Badge>
                         <div className="min-w-0">
-                          <span className="font-medium line-clamp-1">{d.name}</span>
+                          <span className="font-medium line-clamp-1 underline-offset-2 hover:underline">{d.name}</span>
                           {d.donor_state && (
                             <span className="text-muted-foreground text-xs ml-1">· {d.donor_state}</span>
                           )}
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="py-2 text-right font-mono text-xs">{brl(Number(d.total_amount))}</td>
                     <td className="py-2 text-right text-muted-foreground text-xs hidden sm:table-cell">
@@ -407,6 +412,15 @@ export default function DoacoesPage() {
         </div>
 
       </div>
+
+      {/* Donor detail modal */}
+      {activeDonor && (
+        <DonorModal
+          donorId={activeDonor.id}
+          donorName={activeDonor.name}
+          onClose={() => setActiveDonor(null)}
+        />
+      )}
     </main>
   );
 }

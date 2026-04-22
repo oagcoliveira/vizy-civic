@@ -49,7 +49,8 @@ def get_politician_donations(
         params["year"] = election_year
 
     rows = db.execute(text(f"""
-        SELECT d.name, d.donor_type, d.cpf_cnpj_masked, d.state AS donor_state,
+        SELECT d.id AS donor_id, d.name, d.donor_type, d.cpf_cnpj_masked,
+               d.state AS donor_state,
                dn.amount_brl, dn.election_year, dn.receipt_date, dn.source_type
         FROM tse.donations dn
         JOIN tse.donors d ON d.id = dn.donor_id
@@ -58,6 +59,55 @@ def get_politician_donations(
         LIMIT 200
     """), params).fetchall()
     return [dict(r._mapping) for r in rows]
+
+
+@router.get("/donor/{donor_id}")
+def get_donor_donations(
+    donor_id: int,
+    db: Session = Depends(get_db),
+):
+    """All donations made by a specific donor, across all politicians."""
+    rows = db.execute(text("""
+        SELECT pol.id          AS politician_id,
+               pol.short_name AS politician_name,
+               pol.state      AS politician_state,
+               pol.photo_url  AS politician_photo,
+               pa.acronym     AS party_acronym,
+               dn.election_year,
+               dn.amount_brl,
+               dn.receipt_date,
+               dn.source_type
+        FROM tse.donations dn
+        JOIN tse.donors dr      ON dr.id  = dn.donor_id
+        JOIN core.politicians pol ON pol.id = dn.politician_id
+        JOIN core.parties pa    ON pa.id  = pol.party_id
+        WHERE dn.donor_id = :donor_id
+          AND dn.politician_id IS NOT NULL
+        ORDER BY dn.amount_brl DESC
+        LIMIT 500
+    """), {"donor_id": donor_id}).fetchall()
+
+    summary = db.execute(text("""
+        SELECT dr.id, dr.name, dr.donor_type, dr.cpf_cnpj_masked,
+               dr.state AS donor_state,
+               COALESCE(SUM(dn.amount_brl), 0)       AS total_amount,
+               COUNT(DISTINCT dn.politician_id)       AS recipient_count,
+               COUNT(DISTINCT dn.election_year)       AS election_count
+        FROM tse.donors dr
+        LEFT JOIN tse.donations dn ON dn.donor_id = dr.id
+                                  AND dn.politician_id IS NOT NULL
+        WHERE dr.id = :donor_id
+        GROUP BY dr.id, dr.name, dr.donor_type, dr.cpf_cnpj_masked, dr.state
+    """), {"donor_id": donor_id}).fetchone()
+
+    if not summary:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Donor not found")
+
+    return {
+        "donor": dict(summary._mapping),
+        "donations": [dict(r._mapping) for r in rows],
+    }
 
 
 # ── Aggregate endpoints ───────────────────────────────────────────────────────

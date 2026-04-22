@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { DonorModal } from "@/components/DonorModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -60,6 +61,7 @@ type Bill = {
 };
 
 type Donor = {
+  donor_id: number;
   name: string;
   donor_type: string;
   cpf_cnpj_masked: string | null;
@@ -107,6 +109,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
   const [bills, setBills] = useState<Bill[] | null>(null);
   const [donors, setDonors] = useState<Donor[] | null>(null);
   const [committees, setCommittees] = useState<Committee[] | null>(null);
+  const [activeDonor, setActiveDonor] = useState<{ id: number; name: string } | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState<boolean | null>(null);
@@ -450,10 +453,15 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
                     {donors.map((d, i) => (
                       <tr key={i} className="border-b last:border-0">
                         <td className="py-2 pr-4">
-                          <p className="font-medium truncate max-w-[200px]">{d.name}</p>
-                          {d.cpf_cnpj_masked && (
-                            <p className="text-xs text-muted-foreground">{d.cpf_cnpj_masked}</p>
-                          )}
+                          <button
+                            className="text-left hover:text-primary transition-colors"
+                            onClick={() => setActiveDonor({ id: d.donor_id, name: d.name })}
+                          >
+                            <p className="font-medium truncate max-w-[200px] underline-offset-2 hover:underline">{d.name}</p>
+                            {d.cpf_cnpj_masked && (
+                              <p className="text-xs text-muted-foreground">{d.cpf_cnpj_masked}</p>
+                            )}
+                          </button>
                         </td>
                         <td className="py-2 pr-4 text-xs text-muted-foreground whitespace-nowrap">
                           {d.donor_type === "individual" ? t("politician.donor_individual") : t("politician.donor_company")}
@@ -496,10 +504,18 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
             </div>
       )}
 
+
+      {/* Donor detail modal */}
+      {activeDonor && (
+        <DonorModal
+          donorId={activeDonor.id}
+          donorName={activeDonor.name}
+          onClose={() => setActiveDonor(null)}
+        />
+      )}
     </main>
   );
 }
-
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-16 text-muted-foreground text-sm">{message}</div>
