@@ -54,7 +54,7 @@ function statusColor(status: string | null) {
   if (!status) return "secondary";
   const s = status.toLowerCase();
   if (s.includes("norma jurídica") || s.includes("aprovad")) return "default";
-  if (s.includes("arquivad") || s.includes("prejudicad")) return "destructive";
+  if (s.includes("arquivad") || s.includes("prejudicad")) return "outline";
   return "secondary";
 }
 
