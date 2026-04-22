@@ -2,6 +2,8 @@
 Daily ETL: Câmara deputy speeches (discursos).
 
 Fetches speeches for all active deputies since the last successful run.
+Stores the verbatim transcript (transcricao) from the API so that AI
+enrichment can summarise the actual speech content.
 
 Usage:
     python -m camara.speeches_daily
@@ -45,15 +47,20 @@ def run(since_override: str | None = None):
                     # Parse keywords from comma-separated string
                     kw_raw = s.get("keywords") or ""
                     keywords = [k.strip() for k in kw_raw.split(",") if k.strip()] or None
+                    # Transcript — may be None for older/procedural speeches
+                    transcricao = s.get("transcricao") or None
                     res = conn.execute(
                         text("""
                             INSERT INTO core.speeches
-                                (source, external_id, politician_id, delivered_at, phase, summary, keywords, full_text_url)
-                            VALUES ('camara', :eid, :pid, :at, :phase, :summary, :keywords, :url)
+                                (source, external_id, politician_id, delivered_at, phase,
+                                 summary, keywords, full_text_url, transcricao)
+                            VALUES ('camara', :eid, :pid, :at, :phase,
+                                    :summary, :keywords, :url, :transcricao)
                             ON CONFLICT (source, external_id) DO UPDATE SET
-                                summary = COALESCE(EXCLUDED.summary, core.speeches.summary),
-                                keywords = COALESCE(EXCLUDED.keywords, core.speeches.keywords),
-                                full_text_url = COALESCE(EXCLUDED.full_text_url, core.speeches.full_text_url)
+                                summary      = COALESCE(EXCLUDED.summary,      core.speeches.summary),
+                                keywords     = COALESCE(EXCLUDED.keywords,     core.speeches.keywords),
+                                full_text_url= COALESCE(EXCLUDED.full_text_url,core.speeches.full_text_url),
+                                transcricao  = COALESCE(EXCLUDED.transcricao,  core.speeches.transcricao)
                             RETURNING id
                         """),
                         {
@@ -64,6 +71,7 @@ def run(since_override: str | None = None):
                             "summary": s.get("sumario") or None,
                             "keywords": keywords,
                             "url": s.get("urlTexto"),
+                            "transcricao": transcricao,
                         },
                     )
                     if res.fetchone():

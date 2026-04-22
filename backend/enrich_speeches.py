@@ -1,8 +1,18 @@
 """
 AI enrichment runner: generates summary and keywords for speeches.
 
-Reads speeches without summary, calls Claude Sonnet, writes back to DB.
-Uses 'phase' (the speech text/phase field) as the content to summarize.
+Priority for content to summarise:
+  1. transcricao  — verbatim transcript stored from the Câmara API (best)
+  2. summary      — the API's own short summary (sumario field), used as context
+  3. phase        — bureaucratic session label (last resort, least useful)
+
+Reads speeches without an AI-generated summary (where summary IS NULL), calls
+Claude Haiku, and writes back summary + keywords.
+
+Note: speeches where the API already provided a sumario have summary pre-filled
+by the ETL. This script only processes rows where summary is still NULL, which
+typically means the API returned no sumario and we need to derive one from the
+transcript.
 
 Usage (from backend/):
     python enrich_speeches.py            # enriches up to 50 at a time
@@ -30,11 +40,12 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 def fetch_batch(conn, limit: int) -> list[dict]:
     rows = conn.execute(
         text("""
-            SELECT s.id, s.phase, s.full_text_url, s.delivered_at,
+            SELECT s.id, s.phase, s.transcricao, s.full_text_url, s.delivered_at,
                    p.short_name AS politician_name
             FROM core.speeches s
             LEFT JOIN core.politicians p ON p.id = s.politician_id
-            WHERE s.summary IS NULL AND s.phase IS NOT NULL
+            WHERE s.summary IS NULL
+              AND (s.transcricao IS NOT NULL OR s.phase IS NOT NULL)
             ORDER BY s.id
             LIMIT :limit
         """),
@@ -43,19 +54,44 @@ def fetch_batch(conn, limit: int) -> list[dict]:
     return [dict(r._mapping) for r in rows]
 
 
-def generate_speech_enrichment(phase: str, politician_name: str | None) -> dict:
-    """Call Claude Sonnet to generate summary and keywords for a speech."""
+def generate_speech_enrichment(
+    transcricao: str | None,
+    phase: str | None,
+    politician_name: str | None,
+) -> dict:
+    """Call Claude Haiku to generate summary and keywords for a speech.
+
+    Uses transcricao (verbatim transcript) when available; falls back to phase.
+    """
     if not ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
 
     speaker = politician_name or "Deputado(a)"
+
+    if transcricao and len(transcricao.strip()) > 20:
+        # We have a real transcript — summarise it properly
+        content_label = "Transcrição do discurso"
+        content_text = transcricao[:4000]
+        instruction = (
+            "Resuma o discurso em 3 frases em português simples, descrevendo o que foi dito e a posição do parlamentar."
+        )
+    else:
+        # Only the bureaucratic phase label — produce a minimal summary
+        content_label = "Fase/contexto do discurso"
+        content_text = phase or "(sem texto disponível)"
+        instruction = (
+            "Com base apenas no contexto disponível, escreva uma frase curta em português simples "
+            "descrevendo o tipo de participação do parlamentar."
+        )
+
     prompt = (
-        f"Você é um assistente de tecnologia cívica. Analise este resumo de discurso parlamentar brasileiro.\n\n"
+        f"Você é um assistente de tecnologia cívica. Analise este discurso parlamentar brasileiro.\n\n"
         f"Parlamentar: {speaker}\n"
-        f"Texto/fase do discurso: {phase[:2000]}\n\n"
+        f"{content_label}: {content_text}\n\n"
+        f"{instruction}\n"
+        f"Extraia também 3-7 palavras-chave relevantes.\n\n"
         f"Responda APENAS com JSON no formato:\n"
-        f'{{"summary": "resumo em 3 frases em português simples descrevendo o que foi dito", '
-        f'"keywords": ["palavra1", "palavra2", "palavra3", "palavra4", "palavra5"]}}'
+        f'{{"summary": "resumo aqui", "keywords": ["palavra1", "palavra2", "palavra3"]}}'
     )
 
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -89,15 +125,18 @@ def run(limit: int):
         print("No speeches without summary — nothing to do.")
         return
 
-    print(f"Enriching {len(batch)} speeches...")
+    has_transcript = sum(1 for r in batch if r.get("transcricao"))
+    print(f"Enriching {len(batch)} speeches ({has_transcript} with full transcript, "
+          f"{len(batch) - has_transcript} phase-only)...")
     ok = failed = 0
 
     for item in batch:
         label = f"id={item['id']} ({item['politician_name'] or 'unknown'})"
         try:
             enrichment = generate_speech_enrichment(
-                phase=item["phase"],
-                politician_name=item["politician_name"],
+                transcricao=item.get("transcricao"),
+                phase=item.get("phase"),
+                politician_name=item.get("politician_name"),
             )
 
             with engine.begin() as conn:
@@ -105,8 +144,7 @@ def run(limit: int):
                     text("""
                         UPDATE core.speeches
                         SET summary = :summary,
-                            keywords = :keywords,
-                            updated_at = now()
+                            keywords = :keywords
                         WHERE id = :id
                     """),
                     {
@@ -116,7 +154,8 @@ def run(limit: int):
                     },
                 )
 
-            print(f"  [{ok + failed + 1}/{len(batch)}] {label} — ok")
+            src = "transcript" if item.get("transcricao") else "phase"
+            print(f"  [{ok + failed + 1}/{len(batch)}] {label} [{src}] — ok")
             ok += 1
 
         except Exception as exc:
