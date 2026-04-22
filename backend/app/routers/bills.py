@@ -13,6 +13,7 @@ router = APIRouter()
 def list_bills(
     source: str | None = Query(None),
     type: str | None = Query(None),
+    types: str | None = Query(None, description="Comma-separated list of bill types, e.g. PL,PEC,MPV"),
     status: str | None = Query(None),
     policy_area: str | None = Query(None),
     year: int | None = Query(None),
@@ -28,9 +29,13 @@ def list_bills(
     if source:
         where.append("source = :source")
         params["source"] = source
-    if type:
-        where.append("type = :type")
-        params["type"] = type
+    # Support both ?type=PL (single, legacy) and ?types=PL,PEC,MPV (multi-select)
+    _type_list = [t.strip() for t in types.split(",") if t.strip()] if types else ([type] if type else [])
+    if _type_list:
+        placeholders = ", ".join(f":type_{i}" for i in range(len(_type_list)))
+        where.append(f"type IN ({placeholders})")
+        for i, t in enumerate(_type_list):
+            params[f"type_{i}"] = t
     if status:
         where.append("status = :status")
         params["status"] = status
@@ -55,7 +60,7 @@ def list_bills(
                author_label, full_text_url, presented_at, updated_at
         FROM core.bills
         WHERE {where_clause}
-        ORDER BY year DESC NULLS LAST, number DESC NULLS LAST
+        ORDER BY presented_at DESC NULLS LAST, year DESC NULLS LAST, number DESC NULLS LAST
         LIMIT :limit OFFSET :offset
     """), params).fetchall()
 

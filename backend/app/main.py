@@ -59,6 +59,7 @@ BACKEND_DIR = Path(__file__).parent.parent  # /app in container, backend/ locall
 # Data-ingestion ETL jobs (run as `python -m <module>` inside ETL_DIR)
 ETL_JOBS: dict[str, str] = {
     "camara_votes_daily":             "camara.votes_daily",
+    "camara_bills_ingest_daily":      "camara.bills_ingest_daily",
     "camara_bills_daily":             "camara.bills_daily",
     "camara_bills_tramitacoes_daily": "camara.bills_tramitacoes_daily",
     "camara_speeches_daily":          "camara.speeches_daily",
@@ -152,9 +153,14 @@ def _build_scheduler() -> BackgroundScheduler:
         id="camara_votes_daily", name="Câmara votes (daily)", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: _run_etl_module("camara_bills_daily", ETL_JOBS["camara_bills_daily"], ETL_DIR, timeout=1200),
+        lambda: _run_etl_module("camara_bills_ingest_daily", ETL_JOBS["camara_bills_ingest_daily"], ETL_DIR),
         CronTrigger(hour=3, minute=5, timezone=tz),
-        id="camara_bills_daily", name="Câmara bills + AI enrichment (daily)", replace_existing=True,
+        id="camara_bills_ingest_daily", name="Câmara bills ingestion (daily)", replace_existing=True,
+    )
+    scheduler.add_job(
+        lambda: _run_etl_module("camara_bills_daily", ETL_JOBS["camara_bills_daily"], ETL_DIR, timeout=1200),
+        CronTrigger(hour=3, minute=12, timezone=tz),
+        id="camara_bills_daily", name="Câmara bills enrichment (daily)", replace_existing=True,
     )
     scheduler.add_job(
         lambda: _run_etl_module("camara_bills_tramitacoes_daily", ETL_JOBS["camara_bills_tramitacoes_daily"], ETL_DIR),
