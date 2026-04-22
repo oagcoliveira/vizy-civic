@@ -167,9 +167,9 @@ def gather_deputy_data(db: Session, politician_id: int, start: date, end: date) 
                 v["party_alignment_pct"] = None
                 v["voted_against_party"] = False
 
-    # Speeches in range — prefer summary over full transcript to reduce tokens
+    # Speeches in range — include transcricao (capped at 15 000 chars) for richer context
     speeches = db.execute(text("""
-        SELECT s.id, s.delivered_at, s.phase, s.summary, s.keywords, s.policy_tags
+        SELECT s.id, s.delivered_at, s.phase, s.summary, s.transcricao, s.keywords, s.policy_tags
         FROM core.speeches s
         WHERE s.politician_id = :pid
           AND s.delivered_at::date BETWEEN :start AND :end
@@ -312,11 +312,11 @@ def _build_deputy_prompt(data: dict, language: str, start: date, end: date) -> s
     votes_text = "".join(vote_lines)
     bill_context_text = "".join(bill_context_lines)
 
-    # --- Speeches section (summary only, capped at 400 chars) ---
+    # --- Speeches section (transcricao preferred, capped at 15 000 chars) ---
     speech_lines = []
     for s in data["speeches"]:
-        content = s.get("summary") or "(sem texto disponível)"
-        speech_lines.append(f"- {_fmt_date(s.get('delivered_at'))}: {content[:400]}\n")
+        content = s.get("transcricao") or s.get("summary") or "(sem texto disponível)"
+        speech_lines.append(f"- {_fmt_date(s.get('delivered_at'))}: {content[:15000]}\n")
     speeches_text = "".join(speech_lines)
 
     # --- Bills authored section ---
