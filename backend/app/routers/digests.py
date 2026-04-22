@@ -40,6 +40,7 @@ class DigestEstimateRequest(BaseModel):
     date_range: str = "last_7"   # yesterday | last_7 | last_15 | last_30 | last_60
     enrichment: bool = False
     model: str = "haiku"         # haiku | sonnet
+    language: str = "pt"         # pt | en
 
 
 class DigestCreateRequest(BaseModel):
@@ -123,6 +124,7 @@ def estimate_digest(
         date_range=req.date_range,
         enrichment=req.enrichment,
         model_key=req.model,
+        language=req.language,
     )
 
     result["cost_limit_usd"] = COST_BLOCK_THRESHOLD
@@ -150,6 +152,7 @@ def create_digest(
         date_range=req.date_range,
         enrichment=req.enrichment,
         model_key=req.model,
+        language=req.language,
     )
 
     if estimate["blocked"]:
