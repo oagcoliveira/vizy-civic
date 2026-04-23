@@ -269,6 +269,9 @@ export default function ProposicoesPage() {
             selected={selectedPolicyAreas}
             onChange={(next) => setSelectedPolicyAreas(next)}
             placeholder={t("bills.all_policy_areas")}
+            labelSelectAll={t("multiselect.select_all")}
+            labelDeselectAll={t("multiselect.deselect_all")}
+            labelNTypes={(n) => t("multiselect.n_types", { n })}
           />
         )}
         {!isDefaultFilter && (
