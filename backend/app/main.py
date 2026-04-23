@@ -4,29 +4,28 @@ Vizy API — FastAPI application entry point.
 Scheduling strategy
 -------------------
 ETL and AI enrichment jobs are scheduled via APScheduler (BackgroundScheduler)
-to run daily at 03:00 BRT (UTC-3 = 06:00 UTC). This replaces the old
-startup-triggered approach that ran stale jobs every time the server restarted —
-unsuitable now that the backend is always on in Railway.
+to run daily at 03:00 BRT (UTC-3 = 06:00 UTC).
 
 Schedule overview (all times BRT / America/Sao_Paulo):
   03:00  camara_votes_daily
-  03:05  camara_bills_daily          (includes inline AI enrichment)
-  03:20  camara_bills_tramitacoes_daily
+  03:05  camara_bills_ingest_daily      (discovery + detail backfill, capped at 300/run)
+  03:20  camara_bills_tramitacoes_daily (capped at 500/run)
   03:35  camara_speeches_daily
   03:45  camara_commissions_sync
-  04:00  enrich_speeches             (AI — Claude Haiku, batch 100)
-  04:10  enrich_legislative_events   (AI — Claude Haiku, batch 200)
-  04:20  enrich_politicians          (AI — Claude Sonnet, batch 50)
-  Monday 04:30  camara_politicians_weekly
-  Monday 04:35  senado_politicians_weekly
+  04:00  camara_bills_enrich_daily      (AI — Claude Haiku, capped at 200/run)
+  04:15  enrich_speeches                (AI — Claude Haiku, batch 300)
+  04:30  enrich_legislative_events      (AI — Claude Haiku, batch 200)
+  04:45  enrich_politicians             (AI — Claude Sonnet, batch 50)
+  Monday 05:00  camara_politicians_weekly
+  Monday 05:05  senado_politicians_weekly
 
-The /admin/refresh endpoint still allows a manual unconditional run of all
-data-ingestion ETL jobs (requires X-Admin-Key header).
+Admin endpoints:
+  POST /admin/refresh  — triggers data-ingestion ETL jobs only (no AI enrichment)
+  POST /admin/enrich   — triggers AI enrichment jobs only
 """
 
 import os
 import subprocess
-import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,10 +56,10 @@ BACKEND_DIR = Path(__file__).parent.parent  # /app in container, backend/ locall
 # ---------------------------------------------------------------------------
 
 # Data-ingestion ETL jobs (run as `python -m <module>` inside ETL_DIR)
+# These jobs do NOT perform AI enrichment — they only fetch and store raw data.
 ETL_JOBS: dict[str, str] = {
     "camara_votes_daily":             "camara.votes_daily",
     "camara_bills_ingest_daily":      "camara.bills_ingest_daily",
-    "camara_bills_daily":             "camara.bills_daily",
     "camara_bills_tramitacoes_daily": "camara.bills_tramitacoes_daily",
     "camara_speeches_daily":          "camara.speeches_daily",
     "camara_commissions_sync":        "camara.commissions_sync",
@@ -72,10 +71,16 @@ WEEKLY_ETL_JOBS: dict[str, str] = {
     "senado_politicians_weekly": "senado.politicians_weekly",
 }
 
+# AI enrichment ETL jobs (run as `python -m <module>` inside ETL_DIR)
+# Kept separate from ETL_JOBS so /admin/refresh never triggers AI enrichment.
+AI_ETL_JOBS: dict[str, str] = {
+    "camara_bills_enrich_daily": "camara.bills_enrich_daily",
+}
+
 # AI enrichment scripts (run as `python <script>` inside BACKEND_DIR)
 ENRICH_JOBS: dict[str, tuple[str, list[str]]] = {
     # job_name: (script_filename, extra_args)
-    "enrich_speeches":           ("enrich_speeches.py",           ["--limit", "100"]),
+    "enrich_speeches":           ("enrich_speeches.py",           ["--limit", "300"]),
     "enrich_legislative_events": ("enrich_legislative_events.py", ["--limit", "200"]),
     "enrich_politicians":        ("enrich_politicians.py",         ["--limit", "50"]),
 }
@@ -140,7 +145,9 @@ def _build_scheduler() -> BackgroundScheduler:
     Build and configure the APScheduler instance.
 
     All cron times are in America/Sao_Paulo (BRT, UTC-3).
-    Jobs are staggered by 5–15 minutes to avoid DB contention.
+    Ingestion jobs run 03:00–03:45; AI enrichment jobs run 04:00–04:45.
+    This ensures all ingestion is complete before any AI enrichment starts,
+    preventing overlap and DB contention.
     """
     tz = "America/Sao_Paulo"
     scheduler = BackgroundScheduler(timezone=tz)
@@ -153,14 +160,10 @@ def _build_scheduler() -> BackgroundScheduler:
         id="camara_votes_daily", name="Câmara votes (daily)", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: _run_etl_module("camara_bills_ingest_daily", ETL_JOBS["camara_bills_ingest_daily"], ETL_DIR),
+        # timeout=900: discovery + up to 300 detail fetches; should finish in ~10 min normally
+        lambda: _run_etl_module("camara_bills_ingest_daily", ETL_JOBS["camara_bills_ingest_daily"], ETL_DIR, timeout=900),
         CronTrigger(hour=3, minute=5, timezone=tz),
-        id="camara_bills_ingest_daily", name="Câmara bills ingestion (daily)", replace_existing=True,
-    )
-    scheduler.add_job(
-        lambda: _run_etl_module("camara_bills_daily", ETL_JOBS["camara_bills_daily"], ETL_DIR, timeout=1200),
-        CronTrigger(hour=3, minute=12, timezone=tz),
-        id="camara_bills_daily", name="Câmara bills enrichment (daily)", replace_existing=True,
+        id="camara_bills_ingest_daily", name="Câmara bills ingestion + detail (daily)", replace_existing=True,
     )
     scheduler.add_job(
         lambda: _run_etl_module("camara_bills_tramitacoes_daily", ETL_JOBS["camara_bills_tramitacoes_daily"], ETL_DIR),
@@ -178,34 +181,41 @@ def _build_scheduler() -> BackgroundScheduler:
         id="camara_commissions_sync", name="Câmara commissions sync (daily)", replace_existing=True,
     )
 
-    # ── Daily AI enrichment jobs (04:00–04:20 BRT) ───────────────────────
+    # ── Daily AI enrichment jobs (04:00–04:45 BRT) ───────────────────────
+    # All AI jobs fire after 04:00 to ensure ingestion jobs have completed.
 
     scheduler.add_job(
-        lambda: _run_enrich_script("enrich_speeches", *ENRICH_JOBS["enrich_speeches"]),
+        # Bills AI enrichment: short_title, summary, policy_area (capped at 200/run)
+        lambda: _run_etl_module("camara_bills_enrich_daily", AI_ETL_JOBS["camara_bills_enrich_daily"], ETL_DIR, timeout=900),
         CronTrigger(hour=4, minute=0, timezone=tz),
+        id="camara_bills_enrich_daily", name="Câmara bills AI enrichment (daily)", replace_existing=True,
+    )
+    scheduler.add_job(
+        lambda: _run_enrich_script("enrich_speeches", *ENRICH_JOBS["enrich_speeches"]),
+        CronTrigger(hour=4, minute=15, timezone=tz),
         id="enrich_speeches", name="AI enrich speeches (daily)", replace_existing=True,
     )
     scheduler.add_job(
         lambda: _run_enrich_script("enrich_legislative_events", *ENRICH_JOBS["enrich_legislative_events"]),
-        CronTrigger(hour=4, minute=10, timezone=tz),
+        CronTrigger(hour=4, minute=30, timezone=tz),
         id="enrich_legislative_events", name="AI enrich legislative events (daily)", replace_existing=True,
     )
     scheduler.add_job(
         lambda: _run_enrich_script("enrich_politicians", *ENRICH_JOBS["enrich_politicians"]),
-        CronTrigger(hour=4, minute=20, timezone=tz),
+        CronTrigger(hour=4, minute=45, timezone=tz),
         id="enrich_politicians", name="AI enrich politicians (daily)", replace_existing=True,
     )
 
-    # ── Weekly politician sync (Monday 04:30–04:35 BRT) ──────────────────
+    # ── Weekly politician sync (Monday 05:00–05:05 BRT) ──────────────────
 
     scheduler.add_job(
         lambda: _run_etl_module("camara_politicians_weekly", WEEKLY_ETL_JOBS["camara_politicians_weekly"], ETL_DIR),
-        CronTrigger(day_of_week="mon", hour=4, minute=30, timezone=tz),
+        CronTrigger(day_of_week="mon", hour=5, minute=0, timezone=tz),
         id="camara_politicians_weekly", name="Câmara politicians sync (weekly)", replace_existing=True,
     )
     scheduler.add_job(
         lambda: _run_etl_module("senado_politicians_weekly", WEEKLY_ETL_JOBS["senado_politicians_weekly"], ETL_DIR),
-        CronTrigger(day_of_week="mon", hour=4, minute=35, timezone=tz),
+        CronTrigger(day_of_week="mon", hour=5, minute=5, timezone=tz),
         id="senado_politicians_weekly", name="Senado politicians sync (weekly)", replace_existing=True,
     )
 
@@ -276,9 +286,6 @@ def list_schedule(x_admin_key: str | None = Header(None)):
     """Return the next scheduled run time for every job."""
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
-    from apscheduler.schedulers.background import BackgroundScheduler
-    # Retrieve the running scheduler via the lifespan-attached reference
-    # (APScheduler stores jobs in its own registry; we re-read them here)
     jobs = []
     for job in app.state.scheduler.get_jobs() if hasattr(app.state, "scheduler") else []:
         jobs.append({
@@ -292,15 +299,35 @@ def list_schedule(x_admin_key: str | None = Header(None)):
 @app.post("/admin/refresh", tags=["admin"])
 def manual_refresh(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
     """Trigger all data-ingestion ETL jobs immediately (ignores last-run time).
-    AI enrichment jobs are NOT triggered here — run them manually if needed.
+    AI enrichment jobs are NOT triggered here — use /admin/enrich for that.
     Requires X-Admin-Key header matching ADMIN_API_KEY env var."""
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
-    background_tasks.add_task(_force_run_all_etl)
+    background_tasks.add_task(_force_run_ingest_etl)
     return {"status": "refresh started", "jobs": list(ETL_JOBS.keys())}
 
 
-def _force_run_all_etl():
-    """Run all data-ingestion ETL jobs unconditionally in a background thread."""
+@app.post("/admin/enrich", tags=["admin"])
+def manual_enrich(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
+    """Trigger all AI enrichment jobs immediately.
+    Separate from /admin/refresh to avoid running enrichment during ingestion.
+    Requires X-Admin-Key header matching ADMIN_API_KEY env var."""
+    if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    background_tasks.add_task(_force_run_enrich)
+    ai_jobs = list(AI_ETL_JOBS.keys()) + list(ENRICH_JOBS.keys())
+    return {"status": "enrichment started", "jobs": ai_jobs}
+
+
+def _force_run_ingest_etl():
+    """Run all data-ingestion ETL jobs sequentially. Does NOT include AI enrichment."""
     for job_name, module in ETL_JOBS.items():
         _run_etl_module(job_name, module, ETL_DIR)
+
+
+def _force_run_enrich():
+    """Run all AI enrichment jobs sequentially."""
+    for job_name, module in AI_ETL_JOBS.items():
+        _run_etl_module(job_name, module, ETL_DIR)
+    for job_name, (script, extra_args) in ENRICH_JOBS.items():
+        _run_enrich_script(job_name, script, extra_args)
