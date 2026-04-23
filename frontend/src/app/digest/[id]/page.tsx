@@ -80,8 +80,8 @@ type DigestRecord = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
+function fmtDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
@@ -163,7 +163,7 @@ function DeputyCard({ report, t }: { report: DeputyReport; t: (k: TranslationKey
           <p className="text-sm text-muted-foreground">
             {report.party} · {report.state} ·{" "}
             <Link href={`/politico/${report.politician_id}`} className="text-primary hover:underline">
-              ver perfil →
+              {t("digest.report_view_profile")} →
             </Link>
           </p>
         </div>
@@ -205,11 +205,11 @@ function BillCard({ report, t }: { report: BillReport; t: (k: TranslationKey) =>
         </div>
         <p className="text-sm text-muted-foreground line-clamp-3">{report.ementa}</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Autor: {report.author}
-          {report.presented_at && ` · Apresentado em: ${report.presented_at}`}
+          {t("digest.report_author")}: {report.author}
+          {report.presented_at && ` · ${t("digest.report_presented_at")}: ${report.presented_at}`}
         </p>
         <Link href={`/proposicao/${report.bill_id}`} className="text-xs text-primary hover:underline">
-          ver proposição →
+          {t("digest.report_view_bill")} →
         </Link>
       </div>
 
@@ -260,7 +260,7 @@ function TableOfContents({
                 }`}
               >
                 <span className="text-[10px] uppercase mr-1 opacity-60">
-                  {r.type === "deputy" ? "Dep" : "PL"}
+                  {r.type === "deputy" ? t("digest.toc_dep_abbr") : t("digest.toc_bill_abbr")}
                 </span>
                 {reportTitle(r)}
               </a>
@@ -273,10 +273,10 @@ function TableOfContents({
 }
 
 // ---------------------------------------------------------------------------
-// PDF Export
+// PDF Export — labels resolved at call time via the t() function
 // ---------------------------------------------------------------------------
 
-function buildPdfHtml(digest: DigestRecord): string {
+function buildPdfHtml(digest: DigestRecord, t: (k: TranslationKey) => string, locale: string): string {
   const content = digest.content!;
   const reports = content.reports;
 
@@ -288,7 +288,7 @@ function buildPdfHtml(digest: DigestRecord): string {
 
       const newsHtml = r.news_enrichment
         ? `<div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:16px;">
-            <h4 style="font-size:13px;font-weight:600;margin-bottom:8px;">Cobertura jornalística</h4>
+            <h4 style="font-size:13px;font-weight:600;margin-bottom:8px;">${t("digest.report_news")}</h4>
             <p style="font-size:13px;color:#374151;line-height:1.6;">${r.news_enrichment.analysis}</p>
             ${r.news_enrichment.sources.length > 0 ? `<ul style="margin-top:8px;font-size:12px;color:#6b7280;">${r.news_enrichment.sources.map((s) => `<li><a href="${s.url}" style="color:#2563eb;">${s.title}</a> — ${s.outlet}, ${s.date}</li>`).join("")}</ul>` : ""}
           </div>`
@@ -305,15 +305,15 @@ function buildPdfHtml(digest: DigestRecord): string {
         <div style="display:flex;gap:12px;margin-bottom:16px;">
           <div style="text-align:center;padding:8px 16px;background:#f3f4f6;border-radius:8px;">
             <div style="font-size:22px;font-weight:700;">${r.key_numbers.votes}</div>
-            <div style="font-size:11px;color:#6b7280;">Votações</div>
+            <div style="font-size:11px;color:#6b7280;">${t("digest.report_votes")}</div>
           </div>
           <div style="text-align:center;padding:8px 16px;background:#f3f4f6;border-radius:8px;">
             <div style="font-size:22px;font-weight:700;">${r.key_numbers.speeches}</div>
-            <div style="font-size:11px;color:#6b7280;">Discursos</div>
+            <div style="font-size:11px;color:#6b7280;">${t("digest.report_speeches")}</div>
           </div>
           <div style="text-align:center;padding:8px 16px;background:#f3f4f6;border-radius:8px;">
             <div style="font-size:22px;font-weight:700;">${r.key_numbers.bills_authored}</div>
-            <div style="font-size:11px;color:#6b7280;">Projetos</div>
+            <div style="font-size:11px;color:#6b7280;">${t("digest.report_bills_authored")}</div>
           </div>
         </div>
         <p style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:12px;">${r.intro_paragraph}</p>
@@ -323,7 +323,7 @@ function buildPdfHtml(digest: DigestRecord): string {
     } else {
       const newsHtml = r.news_enrichment
         ? `<div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:16px;">
-            <h4 style="font-size:13px;font-weight:600;margin-bottom:8px;">Cobertura jornalística</h4>
+            <h4 style="font-size:13px;font-weight:600;margin-bottom:8px;">${t("digest.report_news")}</h4>
             <p style="font-size:13px;color:#374151;line-height:1.6;">${r.news_enrichment.analysis}</p>
             ${r.news_enrichment.sources.length > 0 ? `<ul style="margin-top:8px;font-size:12px;color:#6b7280;">${r.news_enrichment.sources.map((s) => `<li><a href="${s.url}" style="color:#2563eb;">${s.title}</a> — ${s.outlet}, ${s.date}</li>`).join("")}</ul>` : ""}
           </div>`
@@ -333,7 +333,7 @@ function buildPdfHtml(digest: DigestRecord): string {
         <div style="margin-bottom:16px;">
           <h2 style="font-size:20px;font-weight:700;margin:0 0 4px;">${r.label}</h2>
           <p style="font-size:12px;color:#6b7280;margin:0 0 4px;">${r.ementa}</p>
-          <p style="font-size:12px;color:#6b7280;margin:0;">Autor: ${r.author}${r.presented_at ? ` · Apresentado em: ${r.presented_at}` : ""}</p>
+          <p style="font-size:12px;color:#6b7280;margin:0;">${t("digest.report_author")}: ${r.author}${r.presented_at ? ` · ${t("digest.report_presented_at")}: ${r.presented_at}` : ""}</p>
         </div>
         <p style="font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:12px;">${r.intro_paragraph}</p>
         <p style="font-size:13px;line-height:1.7;white-space:pre-line;">${r.long_summary}</p>
@@ -343,9 +343,9 @@ function buildPdfHtml(digest: DigestRecord): string {
   });
 
   const tocHtml = `<div style="margin-bottom:32px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
-    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin:0 0 12px;">Índice</h3>
+    <h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin:0 0 12px;">${t("digest.report_toc")}</h3>
     <ol style="margin:0;padding-left:20px;font-size:13px;color:#374151;">
-      ${reports.map((r, i) => `<li style="margin-bottom:4px;">${reportTitle(r)}</li>`).join("")}
+      ${reports.map((r) => `<li style="margin-bottom:4px;">${reportTitle(r)}</li>`).join("")}
     </ol>
   </div>`;
 
@@ -361,11 +361,11 @@ function buildPdfHtml(digest: DigestRecord): string {
 </head>
 <body>
   <div style="margin-bottom:32px;border-bottom:2px solid #111827;padding-bottom:16px;">
-    <h1 style="font-size:28px;font-weight:700;margin:0 0 4px;">Digest</h1>
+    <h1 style="font-size:28px;font-weight:700;margin:0 0 4px;">${t("digest.pdf_title")}</h1>
     <p style="font-size:13px;color:#6b7280;margin:0;">${digest.label}</p>
     <p style="font-size:12px;color:#9ca3af;margin:4px 0 0;">
-      Período: ${content.date_range.start} – ${content.date_range.end} ·
-      Gerado em: ${digest.completed_at ? fmtDate(digest.completed_at) : "—"}
+      ${t("digest.report_period")}: ${content.date_range.start} – ${content.date_range.end} ·
+      ${t("digest.report_generated")}: ${digest.completed_at ? fmtDate(digest.completed_at, locale) : "—"}
     </p>
   </div>
   ${tocHtml}
@@ -374,25 +374,14 @@ function buildPdfHtml(digest: DigestRecord): string {
 </html>`;
 }
 
-function downloadPdf(digest: DigestRecord) {
-  const html = buildPdfHtml(digest);
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, "_blank");
-  if (win) {
-    win.onload = () => {
-      win.print();
-    };
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
 export default function DigestViewPage() {
   const { id } = useParams<{ id: string }>();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
 
   const [digest, setDigest] = useState<DigestRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -515,7 +504,7 @@ export default function DigestViewPage() {
           <p className="text-sm text-muted-foreground mt-1">
             {t("digest.report_period")}: {content.date_range.start} – {content.date_range.end}
             {digest.completed_at && (
-              <> · {t("digest.report_generated")}: {fmtDate(digest.completed_at)}</>
+              <> · {t("digest.report_generated")}: {fmtDate(digest.completed_at, dateLocale)}</>
             )}
             {digest.estimated_cost_usd != null && (
               <> · {t("digest.estimated_cost")}: ${digest.estimated_cost_usd.toFixed(4)}</>
@@ -523,7 +512,7 @@ export default function DigestViewPage() {
           </p>
         </div>
         <button
-          onClick={() => downloadPdf(digest)}
+          onClick={() => downloadPdf(digest, t, dateLocale)}
           className="flex-shrink-0 text-sm border rounded-md px-4 py-2 hover:bg-muted transition-colors"
         >
           {t("digest.download_pdf")}
@@ -550,7 +539,7 @@ export default function DigestViewPage() {
           {/* Errors notice */}
           {content.errors.length > 0 && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-4 py-3">
-              <p className="font-medium mb-1">Alguns itens não puderam ser processados:</p>
+              <p className="font-medium mb-1">{t("digest.report_errors_notice")}</p>
               <ul className="list-disc list-inside space-y-0.5">
                 {content.errors.map((e, i) => <li key={i}>{e}</li>)}
               </ul>
@@ -560,4 +549,16 @@ export default function DigestViewPage() {
       </div>
     </main>
   );
+}
+
+function downloadPdf(digest: DigestRecord, t: (k: TranslationKey) => string, locale: string) {
+  const html = buildPdfHtml(digest, t, locale);
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
+  if (win) {
+    win.onload = () => {
+      win.print();
+    };
+  }
 }

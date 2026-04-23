@@ -6,46 +6,52 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { TranslationKey } from "@/lib/translations";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 600;
 
-const ORGAN_NAMES: Record<string, string> = {
-  PLEN:       "Plenário da Câmara",
-  MESA:       "Mesa Diretora",
-  SEMIPLEN:   "Semiplenário",
-  CCJC:       "Comissão de Constituição e Justiça e de Cidadania",
-  CCOM:       "Comissão de Comunicação",
-  CSPCCO:     "Comissão de Segurança Pública e Combate ao Crime Organizado",
-  CSAUDE:     "Comissão de Saúde",
-  CPD:        "Comissão de Previdência, Assistência Social, Infância, Juventude e Família",
-  CE:         "Comissão de Educação",
-  CAPADR:     "Comissão de Agricultura, Pecuária, Abastecimento e Desenvolvimento Rural",
-  CFFC:       "Comissão de Fiscalização Financeira e Controle",
-  CCULT:      "Comissão de Cultura",
-  CFT:        "Comissão de Finanças e Tributação",
-  CVT:        "Comissão de Viação e Transportes",
-  CPASF:      "Comissão de Previdência, Assistência Social, Infância, Juventude e Família",
-  CMADS:      "Comissão de Meio Ambiente e Desenvolvimento Sustentável",
-  CMULHER:    "Comissão de Defesa dos Direitos da Mulher",
-  CTRAB:      "Comissão de Trabalho",
-  CASP:       "Comissão de Administração e Serviço Público",
-  CDHMIR:     "Comissão de Direitos Humanos e Minorias",
-  CME:        "Comissão de Minas e Energia",
-  CESPO:      "Comissão de Esporte",
-  CLP:        "Comissão de Legislação Participativa",
-  CCP:        "Comissão de Ciência e Pesquisa",
-  CREDN:      "Comissão de Relações Exteriores e de Defesa Nacional",
-  CDU:        "Comissão de Desenvolvimento Urbano",
-  CIDOSO:     "Comissão do Idoso",
-  CDC:        "Comissão de Defesa do Consumidor",
-  CDE:        "Comissão de Desenvolvimento Econômico",
-  CPOVOS:     "Comissão dos Povos Indígenas e Tradicionais",
-  CINDRE:     "Comissão de Integração Nacional e Desenvolvimento Regional",
-  CTUR:       "Comissão de Turismo",
-  CCTI:       "Comissão de Ciência, Tecnologia e Inovação",
-  CMO:        "Comissão Mista de Orçamento",
+// Map organ acronym to translation key
+const ORGAN_KEY: Record<string, TranslationKey> = {
+  PLEN:       "organ.PLEN",
+  MESA:       "organ.MESA",
+  SEMIPLEN:   "organ.SEMIPLEN",
+  CCJC:       "organ.CCJC",
+  CCOM:       "organ.CCOM",
+  CSPCCO:     "organ.CSPCCO",
+  CSAUDE:     "organ.CSAUDE",
+  CPD:        "organ.CPD",
+  CE:         "organ.CE",
+  CAPADR:     "organ.CAPADR",
+  CFFC:       "organ.CFFC",
+  CCULT:      "organ.CCULT",
+  CFT:        "organ.CFT",
+  CVT:        "organ.CVT",
+  CPASF:      "organ.CPASF",
+  CMADS:      "organ.CMADS",
+  CMULHER:    "organ.CMULHER",
+  CTRAB:      "organ.CTRAB",
+  CASP:       "organ.CASP",
+  CDHMIR:     "organ.CDHMIR",
+  CME:        "organ.CME",
+  CESPO:      "organ.CESPO",
+  CLP:        "organ.CLP",
+  CCP:        "organ.CCP",
+  CREDN:      "organ.CREDN",
+  CDU:        "organ.CDU",
+  CIDOSO:     "organ.CIDOSO",
+  CDC:        "organ.CDC",
+  CDE:        "organ.CDE",
+  CPOVOS:     "organ.CPOVOS",
+  CINDRE:     "organ.CINDRE",
+  CTUR:       "organ.CTUR",
+  CCTI:       "organ.CCTI",
+  CMO:        "organ.CMO",
+  SECAP_SGM:  "organ.SECAP_SGM",
 };
+
+// Internal sentinel values for vote filter — kept in Portuguese to match API data
+const VOTE_FILTER_INTERNAL = ["__all__", "Sim", "Não", "Abstenção", "Obstrução", "Artigo 17"] as const;
 
 type Bill = {
   id: number;
@@ -89,35 +95,41 @@ type IndividualVote = {
   followed_orientation: boolean | null;
 };
 
-function voteBadge(vote: string) {
-  const map: Record<string, string> = {
-    "Sim": "bg-green-100 text-green-800 border-green-200",
-    "Não": "bg-red-100 text-red-800 border-red-200",
-    "Abstenção": "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "Obstrução": "bg-orange-100 text-orange-800 border-orange-200",
-    "Artigo 17": "bg-gray-100 text-gray-700 border-gray-200",
-  };
-  return <Badge className={map[vote] ?? "bg-muted"}>{vote}</Badge>;
-}
-
-function formatDate(ts: string | null) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-}
-
-// "Todos" is the sentinel value for "no filter" — do not translate the value itself
-const VOTE_FILTER_VALUES = ["Todos", "Sim", "Não", "Abstenção", "Obstrução", "Artigo 17"];
-
 export default function VotacaoPage({ params }: { params: { id: string } }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [votacao, setVotacao] = useState<VotacaoDetail | null>(null);
   const [individualVotes, setIndividualVotes] = useState<IndividualVote[]>([]);
   const [totalVotes, setTotalVotes] = useState(0);
   const [search, setSearch] = useState("");
-  const [voteFilter, setVoteFilter] = useState("Todos");
+  const [voteFilter, setVoteFilter] = useState<string>("__all__");
   const [loading, setLoading] = useState(true);
+
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
+
+  function formatDate(ts: string | null) {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleDateString(dateLocale, {
+      day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  // Map vote value to translated label + colour class
+  function voteStyle(vote: string): { label: string; color: string } {
+    const map: Record<string, { labelKey: TranslationKey; color: string }> = {
+      "Sim":       { labelKey: "vote_label.sim",       color: "bg-green-100 text-green-800 border-green-200" },
+      "Não":       { labelKey: "vote_label.nao",       color: "bg-red-100 text-red-800 border-red-200" },
+      "Abstenção": { labelKey: "vote_label.abstencao", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+      "Obstrução": { labelKey: "vote_label.obstrucao", color: "bg-orange-100 text-orange-800 border-orange-200" },
+      "Artigo 17": { labelKey: "vote_label.artigo17",  color: "bg-gray-100 text-gray-700 border-gray-200" },
+    };
+    const entry = map[vote];
+    return entry ? { label: t(entry.labelKey), color: entry.color } : { label: vote, color: "bg-muted" };
+  }
+
+  function voteBadge(vote: string) {
+    const { label, color } = voteStyle(vote);
+    return <Badge className={color}>{label}</Badge>;
+  }
 
   function resultBadge(result: string | null) {
     if (result === "1" || result?.toLowerCase().includes("aprovad"))
@@ -138,7 +150,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
   }, [params.id]);
 
   const filtered = individualVotes.filter((iv) => {
-    const matchesVote = voteFilter === "Todos" || iv.vote === voteFilter;
+    const matchesVote = voteFilter === "__all__" || iv.vote === voteFilter;
     const matchesSearch = !search ||
       iv.short_name?.toLowerCase().includes(search.toLowerCase()) ||
       iv.name?.toLowerCase().includes(search.toLowerCase());
@@ -178,6 +190,14 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
   const abstCount = individualVotes.filter((v) => v.vote === "Abstenção").length;
   const outroCount = individualVotes.filter((v) => !["Sim", "Não", "Abstenção"].includes(v.vote)).length;
 
+  // Vote summary cards use translated labels
+  const voteSummaryCards = [
+    { labelKey: "vote.summary_sim" as TranslationKey,       count: simCount,   color: "text-green-700 bg-green-50 border-green-200" },
+    { labelKey: "vote.summary_nao" as TranslationKey,       count: naoCount,   color: "text-red-700 bg-red-50 border-red-200" },
+    { labelKey: "vote.summary_abstencao" as TranslationKey, count: abstCount,  color: "text-yellow-700 bg-yellow-50 border-yellow-200" },
+    { labelKey: "vote.summary_outros" as TranslationKey,    count: outroCount, color: "text-gray-600 bg-gray-50 border-gray-200" },
+  ];
+
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
       <Link href="/votacoes" className="text-sm text-muted-foreground hover:text-primary mb-4 block">
@@ -191,7 +211,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
           <span className="text-sm text-muted-foreground mt-1">{formatDate(votacao.voted_at)}</span>
           {votacao.session_label && (
             <span className="text-sm text-muted-foreground mt-1">
-              · {ORGAN_NAMES[votacao.session_label] ?? votacao.session_label}
+              · {ORGAN_KEY[votacao.session_label] ? t(ORGAN_KEY[votacao.session_label]) : votacao.session_label}
             </span>
           )}
           {votacao.vote_type === "nominal" && (
@@ -202,18 +222,15 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
           )}
         </div>
         <h1 className="text-2xl font-bold mb-2">{billLabel}</h1>
-        {/* Show full ementa for the primary bill if different from short_title */}
         {primaryBill?.ementa && primaryBill.ementa !== billLabel && (
           <p className="text-muted-foreground text-sm mt-2 italic">{primaryBill.ementa}</p>
         )}
-        {/* Prominent description if it adds context beyond bill label */}
         {votacao.description && votacao.description !== billLabel && votacao.description !== primaryBill?.ementa && (
           <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
             <p className="text-xs font-semibold text-blue-700 mb-1">{t("vote.about_section")}</p>
             <p className="text-sm text-blue-900">{votacao.description}</p>
           </div>
         )}
-        {/* Symbolic vote banner */}
         {votacao.vote_type === "symbolic" && (
           <div className="mt-3 flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
             <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 flex-shrink-0">{t("vote.symbolic_badge")}</Badge>
@@ -225,21 +242,16 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
       {/* Vote counts */}
       {totalVotes > 0 && (
         <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { label: "Sim", count: simCount, color: "text-green-700 bg-green-50 border-green-200" },
-            { label: "Não", count: naoCount, color: "text-red-700 bg-red-50 border-red-200" },
-            { label: "Abstenção", count: abstCount, color: "text-yellow-700 bg-yellow-50 border-yellow-200" },
-            { label: "Outros", count: outroCount, color: "text-gray-600 bg-gray-50 border-gray-200" },
-          ].map(({ label, count, color }) => (
-            <div key={label} className={`rounded-lg border px-4 py-3 text-center ${color}`}>
+          {voteSummaryCards.map(({ labelKey, count, color }) => (
+            <div key={labelKey} className={`rounded-lg border px-4 py-3 text-center ${color}`}>
               <p className="text-2xl font-bold">{count}</p>
-              <p className="text-xs font-medium">{label}</p>
+              <p className="text-xs font-medium">{t(labelKey)}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Linked bills — comes right after vote count grid */}
+      {/* Linked bills */}
       {votacao.bills.length > 0 && (
         <div className="mb-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -258,7 +270,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
                     {b.is_primary && <Badge variant="secondary" className="text-xs">{t("vote.primary")}</Badge>}
                   </div>
                   <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
-                    {b.short_title ?? b.ementa ?? b.title ?? "—"}
+                    {b.short_title ?? b.title ?? b.ementa ?? "—"}
                   </p>
                 </div>
               </Link>
@@ -267,7 +279,7 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Party breakdown — with % columns */}
+      {/* Party breakdown */}
       {individualVotes.length > 0 && (() => {
         const partyMap: Record<string, { sim: number; nao: number; outros: number }> = {};
         individualVotes.forEach((iv) => {
@@ -288,10 +300,10 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground">{t("vote.col_party")}</th>
-                    <th className="text-right px-4 py-2 font-medium text-green-700">Sim</th>
-                    <th className="text-right px-4 py-2 font-medium text-green-600 text-xs w-14">%Sim</th>
-                    <th className="text-right px-4 py-2 font-medium text-red-700">Não</th>
-                    <th className="text-right px-4 py-2 font-medium text-red-600 text-xs w-14">%Não</th>
+                    <th className="text-right px-4 py-2 font-medium text-green-700">{t("vote.col_sim")}</th>
+                    <th className="text-right px-4 py-2 font-medium text-green-600 text-xs w-14">{t("vote.col_pct_sim")}</th>
+                    <th className="text-right px-4 py-2 font-medium text-red-700">{t("vote.col_nao")}</th>
+                    <th className="text-right px-4 py-2 font-medium text-red-600 text-xs w-14">{t("vote.col_pct_nao")}</th>
                     <th className="text-right px-4 py-2 font-medium text-muted-foreground hidden sm:table-cell">{t("vote.col_others")}</th>
                   </tr>
                 </thead>
@@ -335,17 +347,20 @@ export default function VotacaoPage({ params }: { params: { id: string } }) {
               className="w-48 h-8 text-sm"
             />
             <div className="flex gap-1">
-              {VOTE_FILTER_VALUES.map((f) => (
-                <Button
-                  key={f}
-                  variant={voteFilter === f ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => setVoteFilter(f)}
-                >
-                  {f === "Todos" ? t("vote.filter_all") : f}
-                </Button>
-              ))}
+              {VOTE_FILTER_INTERNAL.map((f) => {
+                const label = f === "__all__" ? t("vote.filter_all") : voteStyle(f).label;
+                return (
+                  <Button
+                    key={f}
+                    variant={voteFilter === f ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setVoteFilter(f)}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
             </div>
           </div>
 

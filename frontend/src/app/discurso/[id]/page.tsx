@@ -23,19 +23,21 @@ type SpeechDetail = {
   state: string | null;
 };
 
-function formatDate(ts: string | null) {
+function formatDate(ts: string | null, locale: string) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleDateString("pt-BR", {
+  return new Date(ts).toLocaleDateString(locale, {
     day: "2-digit", month: "long", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
 export default function DiscursoPage({ params }: { params: { id: string } }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [speech, setSpeech] = useState<SpeechDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
 
   useEffect(() => {
     fetch(`${API}/speeches/${params.id}`)
@@ -62,8 +64,8 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
   if (notFound || !speech) {
     return (
       <main className="max-w-3xl mx-auto px-4 py-10">
-        <p className="text-muted-foreground">Discurso não encontrado.</p>
-        <Link href="/" className="text-primary text-sm mt-2 block">← Início</Link>
+        <p className="text-muted-foreground">{t("speech.not_found")}</p>
+        <Link href="/" className="text-primary text-sm mt-2 block">{t("speech.back_home")}</Link>
       </main>
     );
   }
@@ -76,7 +78,7 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
           href={`/politico/${speech.politician_id}`}
           className="text-sm text-muted-foreground hover:text-primary mb-6 block"
         >
-          ← {speech.politician_short_name ?? "Parlamentar"}
+          ← {speech.politician_short_name ?? t("speech.lawmaker")}
         </Link>
       )}
 
@@ -111,10 +113,10 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
         {speech.phase && (
           <Badge variant="secondary">{speech.phase}</Badge>
         )}
-        <span className="text-sm text-muted-foreground">{formatDate(speech.delivered_at)}</span>
+        <span className="text-sm text-muted-foreground">{formatDate(speech.delivered_at, dateLocale)}</span>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Discurso</h1>
+      <h1 className="text-2xl font-bold mb-6">{t("speech.title")}</h1>
 
       {/* Summary */}
       {speech.summary ? (
@@ -123,7 +125,7 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm mb-8 italic">
-          Resumo não disponível para este discurso.
+          {t("speech.no_summary")}
         </p>
       )}
 
@@ -131,7 +133,7 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
       {speech.keywords && speech.keywords.length > 0 && (
         <div className="mb-8">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-            Temas
+            {t("speech.keywords")}
           </p>
           <div className="flex flex-wrap gap-2">
             {speech.keywords.map((k) => (
@@ -144,9 +146,9 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
       {/* Full text link */}
       {speech.full_text_url && (
         <div className="border rounded-lg p-4 bg-muted/30">
-          <p className="text-sm font-medium mb-1">Íntegra no Diário da Câmara</p>
+          <p className="text-sm font-medium mb-1">{t("speech.full_text_title")}</p>
           <p className="text-xs text-muted-foreground mb-3">
-            O texto completo do discurso está disponível no Diário da Câmara dos Deputados.
+            {t("speech.full_text_desc")}
           </p>
           <a
             href={speech.full_text_url}
@@ -154,7 +156,7 @@ export default function DiscursoPage({ params }: { params: { id: string } }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
           >
-            Ver íntegra na Câmara dos Deputados →
+            {t("speech.full_text_link")}
           </a>
         </div>
       )}

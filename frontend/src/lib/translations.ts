@@ -30,6 +30,10 @@ const pt = {
   "home.cta2_desc":        "Crie uma conta gratuita e receba um resumo semanal das atividades dos parlamentares que você escolher acompanhar.",
   "home.cta2_button":      "Criar conta grátis",
 
+  // ── Layout / metadata ────────────────────────────────────────────────────────
+  "meta.title":       "Vizy — Acompanhe o Congresso",
+  "meta.description": "Acompanhe votações, discursos e financiamentos dos seus deputados e senadores de forma simples e transparente.",
+
   // ── Deputies listing ────────────────────────────────────────────────────────
   "deputies.title":        "Deputados Federais",
   "deputies.subtitle":     "deputados em exercício — 57ª Legislatura",
@@ -38,6 +42,10 @@ const pt = {
   "deputies.all_parties":  "Todos os partidos",
   "deputies.clear":        "Limpar filtros",
   "deputies.empty":        "Nenhum deputado encontrado.",
+
+  // ── Senators listing ─────────────────────────────────────────────────────────
+  "senators.title":   "Senadores",
+  "senators.loading": "Carregando lista de senadores...",
 
   // ── Parties listing ─────────────────────────────────────────────────────────
   "parties.title":         "Partidos",
@@ -91,6 +99,15 @@ const pt = {
   "politician.donor_company":    "Empresa",
   "politician.not_found":        "Parlamentar não encontrado.",
 
+  // ── Vote labels (used in politician and vote detail pages) ───────────────────
+  "vote_label.sim":        "Sim",
+  "vote_label.nao":        "Não",
+  "vote_label.abstencao":  "Abstenção",
+  "vote_label.obstrucao":  "Obstrução",
+  "vote_label.artigo17":   "Artigo 17",
+  "vote_label.todos":      "Todos",
+  "vote_label.outros":     "Outros",
+
   // ── Bills listing ────────────────────────────────────────────────────────────
   "bills.title":         "Proposições",
   "bills.subtitle":      "proposições registradas — Câmara dos Deputados",
@@ -105,6 +122,21 @@ const pt = {
   "bills.col_date":      "Apresentação",
   "bills.col_status":    "Status",
   "bills.no_title":      "Sem título",
+
+  // ── Bill types (used in proposicoes MultiSelect) ─────────────────────────────
+  "bill_type.PL":   "PL — Projeto de Lei",
+  "bill_type.PEC":  "PEC — Proposta de Emenda Constitucional",
+  "bill_type.MPV":  "MPV — Medida Provisória",
+  "bill_type.PDL":  "PDL — Projeto de Decreto Legislativo",
+  "bill_type.PLP":  "PLP — Projeto de Lei Complementar",
+  "bill_type.PRC":  "PRC — Projeto de Resolução",
+  "bill_type.MSC":  "MSC — Mensagem",
+  "bill_type.REQ":  "REQ — Requerimento",
+
+  // ── MultiSelect component ────────────────────────────────────────────────────
+  "multiselect.select_all":   "Selecionar todos",
+  "multiselect.deselect_all": "Desmarcar todos",
+  "multiselect.n_types":      "{n} tipos",
 
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Acompanhar",
@@ -132,6 +164,8 @@ const pt = {
   "votes.col_date":      "Data",
   "votes.col_bill":      "Proposição",
   "votes.col_result":    "Resultado",
+  "votes.col_commission":"Comissão",
+  "votes.col_type":      "Tipo",
   "votes.prev":          "Anterior",
   "votes.next":          "Próxima",
   "votes.page_of":       "Página {page} de {total}",
@@ -144,6 +178,9 @@ const pt = {
   "votes.all_policy_areas":  "Todas as áreas temáticas",
   "votes.help_commissions": "Siglas das comissões",
   "votes.help_bill_types":  "Tipos de proposição",
+  "votes.type_nominal":     "Nominal",
+  "votes.type_symbolic":    "Simbólica",
+  "votes.type_outros":      "Outras ({count} votações)",
 
   // ── Vote detail ──────────────────────────────────────────────────────────────
   "vote.back":           "← Base de Votações",
@@ -159,6 +196,10 @@ const pt = {
   "vote.col_party":      "Partido",
   "vote.col_vote":       "Voto",
   "vote.col_orientation":"Orientação",
+  "vote.col_sim":        "Sim",
+  "vote.col_pct_sim":    "%Sim",
+  "vote.col_nao":        "Não",
+  "vote.col_pct_nao":    "%Não",
   "vote.diverged":       "Divergiu",
   "vote.empty":          "Nenhum resultado encontrado.",
   "vote.not_found":      "Votação não encontrada.",
@@ -168,6 +209,63 @@ const pt = {
   "vote.nominal_badge":  "Votação Nominal",
   "vote.no_votes_badge": "Sem registro individual",
   "vote.about_section":  "Sobre esta votação",
+  "vote.summary_sim":    "Sim",
+  "vote.summary_nao":    "Não",
+  "vote.summary_abstencao": "Abstenção",
+  "vote.summary_outros": "Outros",
+
+  // ── Organ names (committees) ─────────────────────────────────────────────────
+  "organ.PLEN":       "Plenário da Câmara",
+  "organ.MESA":       "Mesa Diretora",
+  "organ.SEMIPLEN":   "Semiplenário",
+  "organ.CCJC":       "Constituição, Justiça e Cidadania",
+  "organ.CCOM":       "Comunicação",
+  "organ.CSPCCO":     "Segurança Pública e Combate ao Crime Organizado",
+  "organ.CSAUDE":     "Saúde",
+  "organ.CPD":        "Previdência, Assistência Social, Infância, Juventude e Família",
+  "organ.CE":         "Educação",
+  "organ.CAPADR":     "Agricultura, Pecuária, Abastecimento e Desenvolvimento Rural",
+  "organ.CFFC":       "Fiscalização Financeira e Controle",
+  "organ.CCULT":      "Cultura",
+  "organ.CFT":        "Finanças e Tributação",
+  "organ.CVT":        "Viação e Transportes",
+  "organ.CPASF":      "Previdência, Assistência Social, Infância e Família",
+  "organ.CMADS":      "Meio Ambiente e Desenvolvimento Sustentável",
+  "organ.CMULHER":    "Defesa dos Direitos da Mulher",
+  "organ.CTRAB":      "Trabalho",
+  "organ.CASP":       "Administração e Serviço Público",
+  "organ.CDHMIR":     "Direitos Humanos e Minorias",
+  "organ.CME":        "Minas e Energia",
+  "organ.CESPO":      "Esporte",
+  "organ.CLP":        "Legislação Participativa",
+  "organ.CCP":        "Ciência e Pesquisa",
+  "organ.CREDN":      "Relações Exteriores e de Defesa Nacional",
+  "organ.CDU":        "Desenvolvimento Urbano",
+  "organ.CIDOSO":     "Idoso",
+  "organ.CDC":        "Defesa do Consumidor",
+  "organ.CDE":        "Desenvolvimento Econômico",
+  "organ.CPOVOS":     "Povos Indígenas e Tradicionais",
+  "organ.CINDRE":     "Integração Nacional e Desenvolvimento Regional",
+  "organ.CTUR":       "Turismo",
+  "organ.CCTI":       "Ciência, Tecnologia e Inovação",
+  "organ.CMO":        "Comissão Mista de Orçamento",
+  "organ.SECAP_SGM":  "Secretaria de Capacitação e Gestão",
+
+  // ── Bill type full names (for acronym help tooltip) ──────────────────────────
+  "bill_type_name.PL":   "Projeto de Lei",
+  "bill_type_name.PLP":  "Projeto de Lei Complementar",
+  "bill_type_name.PEC":  "Proposta de Emenda à Constituição",
+  "bill_type_name.REQ":  "Requerimento",
+  "bill_type_name.MPV":  "Medida Provisória",
+  "bill_type_name.PDL":  "Projeto de Decreto Legislativo",
+  "bill_type_name.TVR":  "Televisão e Rádio (renovação de concessão)",
+  "bill_type_name.PRC":  "Projeto de Resolução da Câmara",
+  "bill_type_name.MSC":  "Mensagem do Executivo",
+  "bill_type_name.REC":  "Recurso",
+  "bill_type_name.REP":  "Requerimento de Plenário",
+  "bill_type_name.SAP":  "Solicitação de Apoio",
+  "bill_type_name.CMC":  "Comissão Mista de Controle",
+  "bill_type_name.PDC":  "Projeto de Decreto do Congresso",
 
   // ── Donations ────────────────────────────────────────────────────────────────
   "donations.title":           "Doações de Campanha",
@@ -220,6 +318,7 @@ const pt = {
   "login.submit":       "Entrar",
   "login.no_account":   "Ainda não tem conta?",
   "login.signup_link":  "Criar conta",
+  "login.error":        "Erro ao fazer login",
 
   "signup.title":       "Criar conta no Vizy",
   "signup.name":        "Nome",
@@ -230,6 +329,7 @@ const pt = {
   "signup.success":     "Conta criada! Redirecionando…",
   "signup.has_account": "Já tem conta?",
   "signup.login_link":  "Entrar",
+  "signup.error":       "Erro ao criar conta",
 
   // ── Feed ─────────────────────────────────────────────────────────────────────
   "feed.title":              "Meu feed",
@@ -244,6 +344,8 @@ const pt = {
   "feed.load_more":          "Carregar mais",
   "feed.event_voted":        "Votou",
   "feed.event_speech":       "Discursou",
+  "feed.lawmaker_fallback":  "Parlamentar #{id}",
+  "feed.browse_deputies":    "Explorar deputados",
 
   // ── Donor modal ─────────────────────────────────────────────────────────────
   "donor.type_company":    "Pessoa Jurídica",
@@ -261,6 +363,17 @@ const pt = {
   "donor.col_source":      "Tipo de receita",
   "donor.footer_note":     "Dados: TSE — Prestação de Contas Eleitorais",
   "donor.cap_warning":     "(exibindo os 500 maiores registros)",
+
+  // ── Speech detail ────────────────────────────────────────────────────────────
+  "speech.not_found":       "Discurso não encontrado.",
+  "speech.back_home":       "← Início",
+  "speech.lawmaker":        "Parlamentar",
+  "speech.title":           "Discurso",
+  "speech.no_summary":      "Resumo não disponível para este discurso.",
+  "speech.keywords":        "Temas",
+  "speech.full_text_title": "Íntegra no Diário da Câmara",
+  "speech.full_text_desc":  "O texto completo do discurso está disponível no Diário da Câmara dos Deputados.",
+  "speech.full_text_link":  "Ver íntegra na Câmara dos Deputados →",
 
   // ── Digest ───────────────────────────────────────────────────────────────────
   "nav.digest":                    "Digest",
@@ -293,10 +406,15 @@ const pt = {
   "digest.form_enrichment":        "Enriquecer com notícias externas",
   "digest.form_enrichment_hint":   "Adiciona uma seção com cobertura jornalística relevante (Estadão, Folha, Globo)",
   "digest.form_model":             "Modelo de IA",
+  "digest.form_model_haiku":       "Claude Haiku (rápido, econômico)",
+  "digest.form_model_sonnet":      "Claude Sonnet (mais capaz)",
   "digest.form_estimate_btn":      "Calcular estimativa",
   "digest.form_generate_btn":      "Gerar Digest",
   "digest.form_generating":        "Gerando...",
   "digest.form_limit":             "Máximo de 10 itens combinados (deputados + proposições)",
+  "digest.form_cancel":            "Cancelar",
+  "digest.form_error_estimate":    "Erro ao calcular estimativa.",
+  "digest.form_error_generate":    "Erro ao gerar Digest.",
 
   "digest.date_yesterday":         "Ontem",
   "digest.date_last7":             "Últimos 7 dias",
@@ -326,12 +444,33 @@ const pt = {
   "digest.report_processing":      "Este Digest ainda está sendo processado. Aguarde...",
   "digest.report_failed":          "Ocorreu um erro ao gerar este Digest.",
   "digest.report_back":            "← Meus Digests",
+  "digest.report_view_profile":    "ver perfil →",
+  "digest.report_view_bill":       "ver proposição →",
+  "digest.report_author":          "Autor:",
+  "digest.report_presented_at":    "Apresentado em:",
+  "digest.report_errors":          "Alguns itens não puderam ser processados:",
+  "digest.report_toc_label":       "Índice",
+  "digest.report_period_label":    "Período:",
+  "digest.report_generated_label": "Gerado em:",
+  "digest.report_dep_prefix":      "Dep",
+  "digest.report_pl_prefix":       "PL",
 
   // ── Shared ───────────────────────────────────────────────────────────────────
   "shared.prev":        "Anterior",
   "shared.next":        "Próxima",
   "shared.page_of":     "Página {page} de {total}",
   "shared.loading":     "Carregando...",
+  "shared.cancel":      "Cancelar",
+
+  // ── Digest (additional keys) ─────────────────────────────────────────────────
+  "digest.error_estimate":         "Erro ao calcular estimativa.",
+  "digest.error_generate":         "Erro ao gerar Digest.",
+  "digest.model_haiku":            "Claude Haiku (rápido, econômico)",
+  "digest.model_sonnet":           "Claude Sonnet (mais capaz)",
+  "digest.pdf_title":              "Digest",
+  "digest.toc_dep_abbr":           "Dep",
+  "digest.toc_bill_abbr":          "PL",
+  "digest.report_errors_notice":   "Alguns itens não puderam ser processados:",
 } as const;
 
 const en: Record<keyof typeof pt, string> = {
@@ -364,6 +503,10 @@ const en: Record<keyof typeof pt, string> = {
   "home.cta2_desc":        "Create a free account and receive a weekly digest of activity from the lawmakers you choose to follow.",
   "home.cta2_button":      "Create free account",
 
+  // ── Layout / metadata ────────────────────────────────────────────────────────
+  "meta.title":       "Vizy — Follow Congress",
+  "meta.description": "Track votes, speeches and campaign finance of your deputies and senators — simply and transparently.",
+
   // ── Deputies listing ────────────────────────────────────────────────────────
   "deputies.title":        "Federal Deputies",
   "deputies.subtitle":     "active deputies — 57th Legislature",
@@ -372,6 +515,10 @@ const en: Record<keyof typeof pt, string> = {
   "deputies.all_parties":  "All parties",
   "deputies.clear":        "Clear filters",
   "deputies.empty":        "No deputies found.",
+
+  // ── Senators listing ─────────────────────────────────────────────────────────
+  "senators.title":   "Senators",
+  "senators.loading": "Loading senators list...",
 
   // ── Parties listing ─────────────────────────────────────────────────────────
   "parties.title":         "Parties",
@@ -425,6 +572,15 @@ const en: Record<keyof typeof pt, string> = {
   "politician.donor_company":    "Company",
   "politician.not_found":        "Lawmaker not found.",
 
+  // ── Vote labels ──────────────────────────────────────────────────────────────
+  "vote_label.sim":        "Yea",
+  "vote_label.nao":        "Nay",
+  "vote_label.abstencao":  "Abstain",
+  "vote_label.obstrucao":  "Obstruct",
+  "vote_label.artigo17":   "Article 17",
+  "vote_label.todos":      "All",
+  "vote_label.outros":     "Others",
+
   // ── Bills listing ────────────────────────────────────────────────────────────
   "bills.title":         "Bills",
   "bills.subtitle":      "bills on record — Chamber of Deputies",
@@ -439,6 +595,21 @@ const en: Record<keyof typeof pt, string> = {
   "bills.col_date":      "Introduced",
   "bills.col_status":    "Status",
   "bills.no_title":      "Untitled",
+
+  // ── Bill types ───────────────────────────────────────────────────────────────
+  "bill_type.PL":   "PL — Bill",
+  "bill_type.PEC":  "PEC — Constitutional Amendment Proposal",
+  "bill_type.MPV":  "MPV — Provisional Measure",
+  "bill_type.PDL":  "PDL — Legislative Decree Bill",
+  "bill_type.PLP":  "PLP — Complementary Law Bill",
+  "bill_type.PRC":  "PRC — Chamber Resolution Bill",
+  "bill_type.MSC":  "MSC — Executive Message",
+  "bill_type.REQ":  "REQ — Motion / Request",
+
+  // ── MultiSelect component ────────────────────────────────────────────────────
+  "multiselect.select_all":   "Select all",
+  "multiselect.deselect_all": "Deselect all",
+  "multiselect.n_types":      "{n} types",
 
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Track",
@@ -466,6 +637,8 @@ const en: Record<keyof typeof pt, string> = {
   "votes.col_date":      "Date",
   "votes.col_bill":      "Bill",
   "votes.col_result":    "Result",
+  "votes.col_commission":"Committee",
+  "votes.col_type":      "Type",
   "votes.prev":          "Previous",
   "votes.next":          "Next",
   "votes.page_of":       "Page {page} of {total}",
@@ -478,6 +651,9 @@ const en: Record<keyof typeof pt, string> = {
   "votes.all_policy_areas":  "All policy areas",
   "votes.help_commissions": "Committee acronyms",
   "votes.help_bill_types":  "Bill types",
+  "votes.type_nominal":     "Nominal",
+  "votes.type_symbolic":    "Voice vote",
+  "votes.type_outros":      "Other ({count} votes)",
 
   // ── Vote detail ──────────────────────────────────────────────────────────────
   "vote.back":           "← Votes database",
@@ -493,6 +669,10 @@ const en: Record<keyof typeof pt, string> = {
   "vote.col_party":      "Party",
   "vote.col_vote":       "Vote",
   "vote.col_orientation":"Guidance",
+  "vote.col_sim":        "Yea",
+  "vote.col_pct_sim":    "%Yea",
+  "vote.col_nao":        "Nay",
+  "vote.col_pct_nao":    "%Nay",
   "vote.diverged":       "Diverged",
   "vote.empty":          "No results found.",
   "vote.not_found":      "Vote not found.",
@@ -502,6 +682,63 @@ const en: Record<keyof typeof pt, string> = {
   "vote.nominal_badge":  "Nominal Vote",
   "vote.no_votes_badge": "No individual records",
   "vote.about_section":  "About this vote",
+  "vote.summary_sim":    "Yea",
+  "vote.summary_nao":    "Nay",
+  "vote.summary_abstencao": "Abstain",
+  "vote.summary_outros": "Others",
+
+  // ── Organ names (committees) ─────────────────────────────────────────────────
+  "organ.PLEN":       "Chamber Plenary",
+  "organ.MESA":       "Bureau / Presiding Officers",
+  "organ.SEMIPLEN":   "Semi-plenary",
+  "organ.CCJC":       "Constitution, Justice and Citizenship",
+  "organ.CCOM":       "Communications",
+  "organ.CSPCCO":     "Public Security and Organized Crime",
+  "organ.CSAUDE":     "Health",
+  "organ.CPD":        "Social Security, Welfare, Children, Youth and Family",
+  "organ.CE":         "Education",
+  "organ.CAPADR":     "Agriculture, Livestock, Supply and Rural Development",
+  "organ.CFFC":       "Financial Oversight and Control",
+  "organ.CCULT":      "Culture",
+  "organ.CFT":        "Finance and Taxation",
+  "organ.CVT":        "Transportation and Roads",
+  "organ.CPASF":      "Social Security, Children and Family",
+  "organ.CMADS":      "Environment and Sustainable Development",
+  "organ.CMULHER":    "Women's Rights",
+  "organ.CTRAB":      "Labour",
+  "organ.CASP":       "Administration and Public Service",
+  "organ.CDHMIR":     "Human Rights and Minorities",
+  "organ.CME":        "Mining and Energy",
+  "organ.CESPO":      "Sport",
+  "organ.CLP":        "Participatory Legislation",
+  "organ.CCP":        "Science and Research",
+  "organ.CREDN":      "Foreign Affairs and National Defence",
+  "organ.CDU":        "Urban Development",
+  "organ.CIDOSO":     "Elderly Affairs",
+  "organ.CDC":        "Consumer Protection",
+  "organ.CDE":        "Economic Development",
+  "organ.CPOVOS":     "Indigenous and Traditional Peoples",
+  "organ.CINDRE":     "National Integration and Regional Development",
+  "organ.CTUR":       "Tourism",
+  "organ.CCTI":       "Science, Technology and Innovation",
+  "organ.CMO":        "Joint Budget Committee",
+  "organ.SECAP_SGM":  "Training and Management Secretariat",
+
+  // ── Bill type full names ─────────────────────────────────────────────────────
+  "bill_type_name.PL":   "Bill",
+  "bill_type_name.PLP":  "Complementary Law Bill",
+  "bill_type_name.PEC":  "Constitutional Amendment Proposal",
+  "bill_type_name.REQ":  "Motion / Request",
+  "bill_type_name.MPV":  "Provisional Measure (Executive Order)",
+  "bill_type_name.PDL":  "Legislative Decree Bill",
+  "bill_type_name.TVR":  "Radio/TV Concession Renewal",
+  "bill_type_name.PRC":  "Chamber Resolution Bill",
+  "bill_type_name.MSC":  "Executive Message",
+  "bill_type_name.REC":  "Appeal",
+  "bill_type_name.REP":  "Plenary Request",
+  "bill_type_name.SAP":  "Support Request",
+  "bill_type_name.CMC":  "Joint Control Commission",
+  "bill_type_name.PDC":  "Congressional Decree Bill",
 
   // ── Donations ────────────────────────────────────────────────────────────────
   "donations.title":           "Campaign Donations",
@@ -554,6 +791,7 @@ const en: Record<keyof typeof pt, string> = {
   "login.submit":       "Log in",
   "login.no_account":   "Don't have an account?",
   "login.signup_link":  "Sign up",
+  "login.error":        "Login failed",
 
   "signup.title":       "Create a Vizy account",
   "signup.name":        "Name",
@@ -564,6 +802,7 @@ const en: Record<keyof typeof pt, string> = {
   "signup.success":     "Account created! Redirecting…",
   "signup.has_account": "Already have an account?",
   "signup.login_link":  "Log in",
+  "signup.error":       "Failed to create account",
 
   // ── Feed ─────────────────────────────────────────────────────────────────────
   "feed.title":              "My feed",
@@ -578,6 +817,8 @@ const en: Record<keyof typeof pt, string> = {
   "feed.load_more":          "Load more",
   "feed.event_voted":        "Voted",
   "feed.event_speech":       "Spoke",
+  "feed.lawmaker_fallback":  "Lawmaker #{id}",
+  "feed.browse_deputies":    "Browse deputies",
 
   // ── Donor modal ─────────────────────────────────────────────────────────────
   "donor.type_company":    "Legal Entity",
@@ -595,6 +836,17 @@ const en: Record<keyof typeof pt, string> = {
   "donor.col_source":      "Source type",
   "donor.footer_note":     "Data: TSE — Electoral Accounts",
   "donor.cap_warning":     "(showing the top 500 records)",
+
+  // ── Speech detail ────────────────────────────────────────────────────────────
+  "speech.not_found":       "Speech not found.",
+  "speech.back_home":       "← Home",
+  "speech.lawmaker":        "Lawmaker",
+  "speech.title":           "Speech",
+  "speech.no_summary":      "Summary not available for this speech.",
+  "speech.keywords":        "Topics",
+  "speech.full_text_title": "Full text in the Chamber Gazette",
+  "speech.full_text_desc":  "The full text of this speech is available in the Chamber of Deputies Official Gazette.",
+  "speech.full_text_link":  "View full text at the Chamber of Deputies →",
 
   // ── Digest ───────────────────────────────────────────────────────────────────
   "nav.digest":                    "Digest",
@@ -627,10 +879,15 @@ const en: Record<keyof typeof pt, string> = {
   "digest.form_enrichment":        "Enrich with external news",
   "digest.form_enrichment_hint":   "Adds a section with relevant journalism (Estadão, Folha, Globo)",
   "digest.form_model":             "AI model",
+  "digest.form_model_haiku":       "Claude Haiku (fast, economical)",
+  "digest.form_model_sonnet":      "Claude Sonnet (more capable)",
   "digest.form_estimate_btn":      "Calculate estimate",
   "digest.form_generate_btn":      "Generate Digest",
   "digest.form_generating":        "Generating...",
   "digest.form_limit":             "Maximum 10 combined items (deputies + bills)",
+  "digest.form_cancel":            "Cancel",
+  "digest.form_error_estimate":    "Failed to calculate estimate.",
+  "digest.form_error_generate":    "Failed to generate Digest.",
 
   "digest.date_yesterday":         "Yesterday",
   "digest.date_last7":             "Last 7 days",
@@ -660,12 +917,33 @@ const en: Record<keyof typeof pt, string> = {
   "digest.report_processing":      "This Digest is still being processed. Please wait...",
   "digest.report_failed":          "An error occurred while generating this Digest.",
   "digest.report_back":            "← My Digests",
+  "digest.report_view_profile":    "view profile →",
+  "digest.report_view_bill":       "view bill →",
+  "digest.report_author":          "Author:",
+  "digest.report_presented_at":    "Introduced:",
+  "digest.report_errors":          "Some items could not be processed:",
+  "digest.report_toc_label":       "Contents",
+  "digest.report_period_label":    "Period:",
+  "digest.report_generated_label": "Generated:",
+  "digest.report_dep_prefix":      "Dep",
+  "digest.report_pl_prefix":       "Bill",
 
   // ── Shared ───────────────────────────────────────────────────────────────────
   "shared.prev":        "Previous",
   "shared.next":        "Next",
   "shared.page_of":     "Page {page} of {total}",
   "shared.loading":     "Loading...",
+  "shared.cancel":      "Cancel",
+
+  // ── Digest (additional keys) ─────────────────────────────────────────────────
+  "digest.error_estimate":         "Failed to calculate estimate.",
+  "digest.error_generate":         "Failed to generate Digest.",
+  "digest.model_haiku":            "Claude Haiku (fast, economical)",
+  "digest.model_sonnet":           "Claude Sonnet (more capable)",
+  "digest.pdf_title":              "Digest",
+  "digest.toc_dep_abbr":           "Dep",
+  "digest.toc_bill_abbr":          "Bill",
+  "digest.report_errors_notice":   "Some items could not be processed:",
 };
 
 export type TranslationKey = keyof typeof pt;

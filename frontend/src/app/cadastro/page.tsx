@@ -27,7 +27,7 @@ export default function CadastroPage() {
       setSuccess(true);
       setTimeout(() => router.push("/"), 1500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erro ao criar conta");
+      setError(err instanceof Error ? err.message : t("signup.error"));
     } finally {
       setLoading(false);
     }

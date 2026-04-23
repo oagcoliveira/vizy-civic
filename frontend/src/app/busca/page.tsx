@@ -40,7 +40,8 @@ type SearchResults = {
 };
 
 export default function BuscaPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
@@ -171,14 +172,14 @@ export default function BuscaPage() {
                             href={`/politico/${s.politician_id}`}
                             className="text-sm font-medium hover:underline"
                           >
-                            {s.politician_name ?? "Parlamentar"}
+                            {s.politician_name ?? t("speech.lawmaker")}
                           </Link>
                         ) : (
-                          <span className="text-sm font-medium">{s.politician_name ?? "Parlamentar"}</span>
+                          <span className="text-sm font-medium">{s.politician_name ?? t("speech.lawmaker")}</span>
                         )}
                         {s.delivered_at && (
                           <span className="text-xs text-gray-400">
-                            {new Date(s.delivered_at).toLocaleDateString("pt-BR")}
+                            {new Date(s.delivered_at).toLocaleDateString(dateLocale)}
                           </span>
                         )}
                       </div>

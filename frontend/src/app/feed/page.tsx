@@ -25,9 +25,9 @@ type FollowedPolitician = {
   photo_url: string | null;
 };
 
-function formatDate(ts: string | null) {
+function formatDate(ts: string | null, locale: string) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleDateString("pt-BR", {
+  return new Date(ts).toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -35,8 +35,9 @@ function formatDate(ts: string | null) {
 }
 
 export default function FeedPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { token, loading: authLoading } = useAuth();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
 
   const [follows, setFollows] = useState<FollowedPolitician[]>([]);
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -155,7 +156,7 @@ export default function FeedPage() {
               href="/deputados"
               className="text-xs text-primary hover:underline"
             >
-              + {t("feed.no_follows_cta").split(".")[0]}
+              + {t("feed.browse_deputies")}
             </Link>
           </div>
         </aside>
@@ -239,7 +240,7 @@ export default function FeedPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">
-                          {politician?.short_name ?? `Parlamentar #${item.politician_id}`}
+                          {politician?.short_name ?? t("feed.lawmaker_fallback", { id: String(item.politician_id) })}
                         </span>
                         <Badge
                           variant="secondary"
@@ -253,7 +254,7 @@ export default function FeedPage() {
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground ml-auto">
-                          {formatDate(item.occurred_at)}
+                          {formatDate(item.occurred_at, dateLocale)}
                         </span>
                       </div>
                       {item.title && (
