@@ -27,8 +27,8 @@ function StatusBadge({ status, t }: { status: string; t: (k: TranslationKey) => 
   return <Badge variant="outline" className="text-xs border-destructive text-destructive">{t("digest.status_failed")}</Badge>;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
+function formatDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleDateString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -36,7 +36,8 @@ function formatDate(iso: string) {
 
 export default function DigestPage() {
   const { user, loading: authLoading } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
   const router = useRouter();
 
   const [digests, setDigests] = useState<DigestRecord[]>([]);
@@ -155,7 +156,7 @@ export default function DigestPage() {
                   <StatusBadge status={d.status} t={t} />
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                  <span>{t("digest.created_at")}: {formatDate(d.created_at)}</span>
+                  <span>{t("digest.created_at")}: {formatDate(d.created_at, dateLocale)}</span>
                   {d.estimated_cost_usd != null && (
                     <span>{t("digest.estimated_cost")}: ${d.estimated_cost_usd.toFixed(4)}</span>
                   )}
@@ -323,7 +324,7 @@ function DigestForm({
       setEstimate(res.data);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      setError(err?.response?.data?.detail ?? "Erro ao calcular estimativa.");
+      setError(err?.response?.data?.detail ?? t("digest.error_estimate"));
     } finally {
       setEstimating(false);
     }
@@ -344,7 +345,7 @@ function DigestForm({
       onCreated(res.data);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      setError(err?.response?.data?.detail ?? "Erro ao gerar Digest.");
+      setError(err?.response?.data?.detail ?? t("digest.error_generate"));
     } finally {
       setGenerating(false);
     }
@@ -509,8 +510,8 @@ function DigestForm({
         <div>
           <label className="block text-sm font-medium mb-1">{t("digest.form_model")}</label>
           <select value={model} onChange={(e) => { setModel(e.target.value); setEstimate(null); }} className={SELECT_CLASS}>
-            <option value="haiku">Claude Haiku (rápido, econômico)</option>
-            <option value="sonnet">Claude Sonnet (mais capaz)</option>
+            <option value="haiku">{t("digest.model_haiku")}</option>
+            <option value="sonnet">{t("digest.model_sonnet")}</option>
           </select>
         </div>
 
@@ -576,7 +577,7 @@ function DigestForm({
             {generating ? t("digest.form_generating") : t("digest.form_generate_btn")}
           </Button>
           <Button variant="ghost" onClick={onCancel}>
-            Cancelar
+            {t("shared.cancel")}
           </Button>
         </div>
       </div>

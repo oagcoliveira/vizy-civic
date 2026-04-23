@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { DonorModal } from "@/components/DonorModal";
+import type { TranslationKey } from "@/lib/translations";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -90,16 +91,23 @@ type Committee = {
   ended_at: string | null;
 };
 
-const VOTE_LABEL: Record<string, { label: string; color: string }> = {
-  Sim:        { label: "Sim",        color: "bg-green-100 text-green-800" },
-  Não:        { label: "Não",        color: "bg-red-100 text-red-800" },
-  Abstenção:  { label: "Abstenção",  color: "bg-yellow-100 text-yellow-800" },
-  Obstrução:  { label: "Obstrução",  color: "bg-orange-100 text-orange-800" },
+const VOTE_LABEL_MAP: Record<string, { labelKey: TranslationKey; color: string }> = {
+  Sim:        { labelKey: "vote_label.sim",       color: "bg-green-100 text-green-800" },
+  Não:        { labelKey: "vote_label.nao",       color: "bg-red-100 text-red-800" },
+  Abstenção:  { labelKey: "vote_label.abstencao", color: "bg-yellow-100 text-yellow-800" },
+  Obstrução:  { labelKey: "vote_label.obstrucao", color: "bg-orange-100 text-orange-800" },
 };
 
 export default function PoliticianPage({ params }: { params: { id: string } }) {
   const id = params.id;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
+
+  function resolveVoteStyle(vote: string | null): { label: string; color: string } {
+    const entry = VOTE_LABEL_MAP[vote ?? ""];
+    if (entry) return { label: t(entry.labelKey), color: entry.color };
+    return { label: vote ?? "—", color: "bg-muted text-muted-foreground" };
+  }
   const { user, token } = useAuth();
   const [politician, setPolitician] = useState<Politician | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -289,10 +297,10 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
           : <div className="space-y-3">
               {activity.map((item) => {
                 const date = item.event_date
-                  ? new Date(item.event_date).toLocaleDateString("pt-BR")
+                  ? new Date(item.event_date).toLocaleDateString(dateLocale)
                   : "—";
                 if (item.event_type === "vote") {
-                  const voteStyle = VOTE_LABEL[item.vote ?? ""] ?? { label: item.vote ?? "—", color: "bg-muted text-muted-foreground" };
+                  const voteStyle = resolveVoteStyle(item.vote);
                   const card = (
                     <Card>
                       <CardContent className="p-4 flex items-start justify-between gap-4">
@@ -332,7 +340,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
           ? <EmptyState message={t("politician.empty_votes")} />
           : <div className="space-y-3">
               {votes.map((v, i) => {
-                const voteStyle = VOTE_LABEL[v.vote] ?? { label: v.vote, color: "bg-muted text-muted-foreground" };
+                const voteStyle = resolveVoteStyle(v.vote);
                 return (
                   <Link key={i} href={`/votacao/${v.votacao_id}`} className="block hover:opacity-80 transition-opacity">
                     <Card>
@@ -355,7 +363,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
                             {voteStyle.label}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {v.voted_at ? new Date(v.voted_at).toLocaleDateString("pt-BR") : "—"}
+                            {v.voted_at ? new Date(v.voted_at).toLocaleDateString(dateLocale) : "—"}
                           </span>
                         </div>
                       </CardContent>
@@ -378,7 +386,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4 mb-2">
                         <span className="text-xs text-muted-foreground">
-                          {s.delivered_at ? new Date(s.delivered_at).toLocaleDateString("pt-BR") : "—"}
+                          {s.delivered_at ? new Date(s.delivered_at).toLocaleDateString(dateLocale) : "—"}
                           {s.phase && ` · ${s.phase}`}
                         </span>
                       </div>

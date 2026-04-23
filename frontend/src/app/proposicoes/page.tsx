@@ -6,20 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { TranslationKey } from "@/lib/translations";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
 
-// All bill types shown in the filter, with human-readable labels
-const BILL_TYPES: { value: string; label: string }[] = [
-  { value: "PL",  label: "PL — Projeto de Lei" },
-  { value: "PEC", label: "PEC — Proposta de Emenda Constitucional" },
-  { value: "MPV", label: "MPV — Medida Provisória" },
-  { value: "PDL", label: "PDL — Projeto de Decreto Legislativo" },
-  { value: "PLP", label: "PLP — Projeto de Lei Complementar" },
-  { value: "PRC", label: "PRC — Projeto de Resolução" },
-  { value: "MSC", label: "MSC — Mensagem" },
-  { value: "REQ", label: "REQ — Requerimento" },
+// Bill type values with their translation key for the label
+const BILL_TYPES: { value: string; labelKey: TranslationKey }[] = [
+  { value: "PL",  labelKey: "bill_type.PL" },
+  { value: "PEC", labelKey: "bill_type.PEC" },
+  { value: "MPV", labelKey: "bill_type.MPV" },
+  { value: "PDL", labelKey: "bill_type.PDL" },
+  { value: "PLP", labelKey: "bill_type.PLP" },
+  { value: "PRC", labelKey: "bill_type.PRC" },
+  { value: "MSC", labelKey: "bill_type.MSC" },
+  { value: "REQ", labelKey: "bill_type.REQ" },
 ];
 
 // Types selected by default (REQ and MSC are intentionally excluded)
@@ -51,14 +52,19 @@ function statusColor(status: string | null) {
 
 // ── Multi-select dropdown component ──────────────────────────────────────────
 
+type MultiSelectOption = { value: string; label: string };
+
 type MultiSelectProps = {
-  options: { value: string; label: string }[];
+  options: MultiSelectOption[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
   placeholder: string;
+  labelSelectAll: string;
+  labelDeselectAll: string;
+  labelNTypes: (n: number) => string;
 };
 
-function MultiSelect({ options, selected, onChange, placeholder }: MultiSelectProps) {
+function MultiSelect({ options, selected, onChange, placeholder, labelSelectAll, labelDeselectAll, labelNTypes }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -94,7 +100,7 @@ function MultiSelect({ options, selected, onChange, placeholder }: MultiSelectPr
       ? placeholder
       : selected.size === 1
       ? Array.from(selected)[0]
-      : `${selected.size} tipos`;
+      : labelNTypes(selected.size);
 
   return (
     <div ref={ref} className="relative">
@@ -120,7 +126,7 @@ function MultiSelect({ options, selected, onChange, placeholder }: MultiSelectPr
               ref={(el) => { if (el) el.indeterminate = !allSelected && !noneSelected; }}
               className="h-4 w-4 rounded border-input accent-primary"
             />
-            <span className="font-medium">{allSelected ? "Desmarcar todos" : "Selecionar todos"}</span>
+            <span className="font-medium">{allSelected ? labelDeselectAll : labelSelectAll}</span>
           </div>
           {/* Individual options */}
           <div className="max-h-64 overflow-y-auto py-1">
@@ -149,7 +155,15 @@ function MultiSelect({ options, selected, onChange, placeholder }: MultiSelectPr
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ProposicoesPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
+
+  // Build translated options for MultiSelect
+  const billTypeOptions: MultiSelectOption[] = BILL_TYPES.map((bt) => ({
+    value: bt.value,
+    label: t(bt.labelKey),
+  }));
+
   const [items, setItems] = useState<Bill[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -206,7 +220,7 @@ export default function ProposicoesPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-1">{t("bills.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          {total.toLocaleString("pt-BR")} {t("bills.subtitle")}
+          {total.toLocaleString(dateLocale)} {t("bills.subtitle")}
         </p>
       </div>
 
@@ -220,10 +234,13 @@ export default function ProposicoesPage() {
           className="w-72"
         />
         <MultiSelect
-          options={BILL_TYPES}
+          options={billTypeOptions}
           selected={selectedTypes}
           onChange={(next) => setSelectedTypes(next)}
           placeholder={t("bills.all_types")}
+          labelSelectAll={t("multiselect.select_all")}
+          labelDeselectAll={t("multiselect.deselect_all")}
+          labelNTypes={(n) => t("multiselect.n_types", { n })}
         />
         {!isDefaultFilter && (
           <Button variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground">
@@ -277,7 +294,7 @@ export default function ProposicoesPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs hidden sm:table-cell whitespace-nowrap">
                     {b.presented_at
-                      ? new Date(b.presented_at).toLocaleDateString("pt-BR", {
+                      ? new Date(b.presented_at).toLocaleDateString(dateLocale, {
                           day: "2-digit",
                           month: "2-digit",
                           year: "numeric",

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { TranslationKey } from "@/lib/translations";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
@@ -12,89 +13,52 @@ const PAGE_SIZE = 50;
 const SELECT_CLASS =
   "h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
-const ORGAN_NAMES_PT: Record<string, string> = {
-  PLEN:         "Plenário da Câmara",
-  CCJC:         "Constituição, Justiça e Cidadania",
-  CCOM:         "Comunicação",
-  CSPCCO:       "Segurança Pública e Combate ao Crime Organizado",
-  CSAUDE:       "Saúde",
-  CPD:          "Previdência, Assistência Social, Infância, Juventude e Família",
-  "SECAP(SGM)": "Secretaria de Capacitação e Gestão",
-  MESA:         "Mesa Diretora",
-  CE:           "Educação",
-  CAPADR:       "Agricultura, Pecuária, Abastecimento e Desenvolvimento Rural",
-  CFFC:         "Fiscalização Financeira e Controle",
-  CCULT:        "Cultura",
-  CFT:          "Finanças e Tributação",
-  CVT:          "Viação e Transportes",
-  CPASF:        "Previdência, Assistência Social, Infância e Família",
-  CMADS:        "Meio Ambiente e Desenvolvimento Sustentável",
-  CMULHER:      "Defesa dos Direitos da Mulher",
+// Map organ acronym to translation key (used in the AcronymHelp tooltip)
+const ORGAN_KEY: Record<string, TranslationKey> = {
+  PLEN:           "organ.PLEN",
+  CCJC:           "organ.CCJC",
+  CCOM:           "organ.CCOM",
+  CSPCCO:         "organ.CSPCCO",
+  CSAUDE:         "organ.CSAUDE",
+  CPD:            "organ.CPD",
+  "SECAP(SGM)":   "organ.SECAP_SGM",
+  MESA:           "organ.MESA",
+  CE:             "organ.CE",
+  CAPADR:         "organ.CAPADR",
+  CFFC:           "organ.CFFC",
+  CCULT:          "organ.CCULT",
+  CFT:            "organ.CFT",
+  CVT:            "organ.CVT",
+  CPASF:          "organ.CPASF",
+  CMADS:          "organ.CMADS",
+  CMULHER:        "organ.CMULHER",
 };
 
-const ORGAN_NAMES_EN: Record<string, string> = {
-  PLEN:         "Chamber Plenary",
-  CCJC:         "Constitution, Justice and Citizenship",
-  CCOM:         "Communications",
-  CSPCCO:       "Public Security and Organized Crime",
-  CSAUDE:       "Health",
-  CPD:          "Social Security, Welfare, Children, Youth and Family",
-  "SECAP(SGM)": "Training and Management Secretariat",
-  MESA:         "Bureau / Presiding Officers",
-  CE:           "Education",
-  CAPADR:       "Agriculture, Livestock, Supply and Rural Development",
-  CFFC:         "Financial Oversight and Control",
-  CCULT:        "Culture",
-  CFT:          "Finance and Taxation",
-  CVT:          "Transportation and Roads",
-  CPASF:        "Social Security, Children and Family",
-  CMADS:        "Environment and Sustainable Development",
-  CMULHER:      "Women's Rights",
+// Map bill type acronym to translation key
+const BILL_TYPE_KEY: Record<string, TranslationKey> = {
+  PL:   "bill_type_name.PL",
+  PLP:  "bill_type_name.PLP",
+  PEC:  "bill_type_name.PEC",
+  REQ:  "bill_type_name.REQ",
+  MPV:  "bill_type_name.MPV",
+  PDL:  "bill_type_name.PDL",
+  TVR:  "bill_type_name.TVR",
+  PRC:  "bill_type_name.PRC",
+  MSC:  "bill_type_name.MSC",
+  REC:  "bill_type_name.REC",
+  REP:  "bill_type_name.REP",
+  SAP:  "bill_type_name.SAP",
+  CMC:  "bill_type_name.CMC",
+  PDC:  "bill_type_name.PDC",
 };
 
-const BILL_TYPE_NAMES_PT: Record<string, string> = {
-  PL:   "Projeto de Lei",
-  PLP:  "Projeto de Lei Complementar",
-  PEC:  "Proposta de Emenda à Constituição",
-  REQ:  "Requerimento",
-  MPV:  "Medida Provisória",
-  PDL:  "Projeto de Decreto Legislativo",
-  TVR:  "Televisão e Rádio (renovação de concessão)",
-  PRC:  "Projeto de Resolução da Câmara",
-  MSC:  "Mensagem do Executivo",
-  REC:  "Recurso",
-  REP:  "Requerimento de Plenário",
-  SAP:  "Solicitação de Apoio",
-  CMC:  "Comissão Mista de Controle",
-  PDC:  "Projeto de Decreto do Congresso",
-};
-
-const BILL_TYPE_NAMES_EN: Record<string, string> = {
-  PL:   "Bill",
-  PLP:  "Complementary Law Bill",
-  PEC:  "Constitutional Amendment Proposal",
-  REQ:  "Motion / Request",
-  MPV:  "Provisional Measure (Executive Order)",
-  PDL:  "Legislative Decree Bill",
-  TVR:  "Radio/TV Concession Renewal",
-  PRC:  "Chamber Resolution Bill",
-  MSC:  "Executive Message",
-  REC:  "Appeal",
-  REP:  "Plenary Request",
-  SAP:  "Support Request",
-  CMC:  "Joint Control Commission",
-  PDC:  "Congressional Decree Bill",
-};
-
-function AcronymHelp({ titleKey, mapPt, mapEn }: {
-  titleKey: string;
-  mapPt: Record<string, string>;
-  mapEn: Record<string, string>;
+function AcronymHelp({ titleKey, keyMap }: {
+  titleKey: TranslationKey;
+  keyMap: Record<string, TranslationKey>;
 }) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const map = lang === "en" ? mapEn : mapPt;
 
   useEffect(() => {
     if (!open) return;
@@ -110,18 +74,18 @@ function AcronymHelp({ titleKey, mapPt, mapEn }: {
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-5 h-5 rounded-full bg-muted border text-muted-foreground text-xs font-bold leading-none flex items-center justify-center hover:bg-muted/80 transition-colors"
-        aria-label={t(titleKey as Parameters<typeof t>[0])}
+        aria-label={t(titleKey)}
       >
         ?
       </button>
       {open && (
         <div className="absolute left-0 top-7 z-50 w-80 rounded-lg border border-gray-200 bg-white shadow-lg p-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t(titleKey as Parameters<typeof t>[0])}</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t(titleKey)}</p>
           <div className="space-y-1 max-h-72 overflow-y-auto">
-            {Object.entries(map).map(([acronym, name]) => (
+            {Object.entries(keyMap).map(([acronym, tKey]) => (
               <div key={acronym} className="flex gap-2 text-xs">
                 <span className="font-mono font-semibold text-gray-900 w-16 flex-shrink-0">{acronym}</span>
-                <span className="text-gray-600">{name}</span>
+                <span className="text-gray-600">{t(tKey)}</span>
               </div>
             ))}
           </div>
@@ -156,13 +120,15 @@ function billLabel(v: Votacao) {
   return v.description ?? "—";
 }
 
-function formatDate(ts: string | null) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 export default function VotacoesPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "en" ? "en-GB" : "pt-BR";
+
+  function formatDate(ts: string | null) {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleDateString(dateLocale, { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
   const [items, setItems] = useState<Votacao[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -196,8 +162,8 @@ export default function VotacoesPage() {
   }
 
   function voteTypeBadge(vt: string | null) {
-    if (vt === "nominal") return <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">Nominal</Badge>;
-    if (vt === "symbolic") return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">Simbólica</Badge>;
+    if (vt === "nominal")   return <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">{t("votes.type_nominal")}</Badge>;
+    if (vt === "symbolic")  return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">{t("votes.type_symbolic")}</Badge>;
     return null;
   }
 
@@ -238,7 +204,7 @@ export default function VotacoesPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-1">{t("votes.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          {total.toLocaleString("pt-BR")} {t("votes.subtitle")}
+          {total.toLocaleString(dateLocale)} {t("votes.subtitle")}
         </p>
       </div>
 
@@ -247,8 +213,8 @@ export default function VotacoesPage() {
         {/* Vote type */}
         <select value={voteTypeFilter} onChange={(e) => setVoteTypeFilter(e.target.value)} className={SELECT_CLASS}>
           <option value="">{t("votes.all_types")}</option>
-          <option value="nominal">Nominal</option>
-          <option value="symbolic">Simbólica</option>
+          <option value="nominal">{t("votes.type_nominal")}</option>
+          <option value="symbolic">{t("votes.type_symbolic")}</option>
         </select>
 
         {/* Result */}
@@ -260,16 +226,16 @@ export default function VotacoesPage() {
 
         {/* Commission / session */}
         <div className="flex items-center gap-1">
-        <select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} className={SELECT_CLASS}>
-          <option value="">{t("votes.all_commissions")}</option>
-          {sessionLabels.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-          {sessionOutrosCount > 0 && (
-            <option value="__outros__">Outras ({sessionOutrosCount} votações)</option>
-          )}
-        </select>
-        <AcronymHelp titleKey="votes.help_commissions" mapPt={ORGAN_NAMES_PT} mapEn={ORGAN_NAMES_EN} />
+          <select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} className={SELECT_CLASS}>
+            <option value="">{t("votes.all_commissions")}</option>
+            {sessionLabels.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+            {sessionOutrosCount > 0 && (
+              <option value="__outros__">{t("votes.type_outros", { count: String(sessionOutrosCount) })}</option>
+            )}
+          </select>
+          <AcronymHelp titleKey="votes.help_commissions" keyMap={ORGAN_KEY} />
         </div>
 
         {/* Bill type */}
@@ -280,7 +246,7 @@ export default function VotacoesPage() {
               <option key={bt} value={bt}>{bt}</option>
             ))}
           </select>
-          <AcronymHelp titleKey="votes.help_bill_types" mapPt={BILL_TYPE_NAMES_PT} mapEn={BILL_TYPE_NAMES_EN} />
+          <AcronymHelp titleKey="votes.help_bill_types" keyMap={BILL_TYPE_KEY} />
         </div>
 
         {hasFilter && (
@@ -306,8 +272,8 @@ export default function VotacoesPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("votes.col_date")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("votes.col_bill")}</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">Comissão</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden md:table-cell">Tipo</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">{t("votes.col_commission")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden md:table-cell">{t("votes.col_type")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">{t("votes.col_result")}</th>
               </tr>
             </thead>
