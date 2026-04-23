@@ -107,7 +107,7 @@ function MultiSelect({ options, selected, onChange, placeholder, labelSelectAll,
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-9 min-w-[160px] rounded-md border border-input bg-background px-3 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-9 min-w-[160px] rounded-md border border-input bg-white dark:bg-zinc-900 px-3 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <span className="truncate text-muted-foreground">{summary}</span>
         <svg className="h-4 w-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -116,7 +116,7 @@ function MultiSelect({ options, selected, onChange, placeholder, labelSelectAll,
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-72 rounded-md border bg-popover shadow-md text-sm">
+        <div className="absolute z-50 mt-1 w-72 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-sm">
           {/* Select all / none */}
           <div className="border-b px-3 py-2 flex items-center gap-2 cursor-pointer hover:bg-muted/50" onClick={toggleAll}>
             <input

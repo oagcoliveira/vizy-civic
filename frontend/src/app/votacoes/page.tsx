@@ -10,7 +10,7 @@ const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
 
 const SELECT_CLASS =
-  "h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "h-9 rounded-md border border-input bg-white dark:bg-zinc-900 px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 const ORGAN_NAMES_PT: Record<string, string> = {
   PLEN:         "Plenário da Câmara",
@@ -199,7 +199,7 @@ function PolicyAreaSelect({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="h-9 min-w-[160px] rounded-md border border-input bg-background px-3 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-9 min-w-[160px] rounded-md border border-input bg-white dark:bg-zinc-900 px-3 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <span className="truncate text-muted-foreground">{summary}</span>
         <svg className="h-4 w-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -207,7 +207,7 @@ function PolicyAreaSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-64 rounded-md border bg-popover shadow-md text-sm">
+        <div className="absolute z-50 mt-1 w-64 rounded-md border bg-white dark:bg-zinc-900 shadow-md text-sm">
           <div className="max-h-72 overflow-y-auto py-1">
             {options.map((opt) => (
               <div
