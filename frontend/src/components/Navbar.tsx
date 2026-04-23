@@ -46,6 +46,11 @@ export function Navbar() {
               <Link href="/feed" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
                 {t("nav.feed")}
               </Link>
+              {user.email === "oagcoliveira@gmail.com" && (
+                <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5">
+                  Admin
+                </Link>
+              )}
               <span className="text-sm text-muted-foreground">{user.name.split(" ")[0]}</span>
               <button
                 onClick={logout}
