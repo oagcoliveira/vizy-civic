@@ -211,7 +211,7 @@ def run_detail_backfill(limit: int, dry_run: bool = False) -> int:
             FROM core.bills
             WHERE source = 'camara'
               AND status IS NULL
-            ORDER BY id
+            ORDER BY presented_at DESC NULLS LAST, id DESC
             LIMIT :limit
         """), {"limit": limit}).fetchall()
 

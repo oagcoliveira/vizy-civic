@@ -14,6 +14,7 @@ def list_votacoes(
     result: str | None = Query(None),
     session_label: str | None = Query(None),
     bill_type: str | None = Query(None),
+    policy_areas: str | None = Query(None, description="Comma-separated policy areas, e.g. Saúde,Educação"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, le=100),
     db: Session = Depends(get_db),
@@ -45,6 +46,13 @@ def list_votacoes(
     if bill_type:
         where.append("b.type = :bill_type")
         params["bill_type"] = bill_type
+    if policy_areas:
+        _pa_list = [a.strip() for a in policy_areas.split(",") if a.strip()]
+        if _pa_list:
+            pa_placeholders = ", ".join(f":pa_{i}" for i in range(len(_pa_list)))
+            where.append(f"b.policy_area IN ({pa_placeholders})")
+            for i, a in enumerate(_pa_list):
+                params[f"pa_{i}"] = a
 
     where_clause = " AND ".join(where)
 
@@ -89,10 +97,18 @@ def get_filter_options(db: Session = Depends(get_db)):
     """)).fetchall()
     main = [r[0] for r in labels if r[1] >= 600]
     outros_count = sum(r[1] for r in labels if r[1] < 600)
+    policy_areas_rows = db.execute(text("""
+        SELECT DISTINCT b.policy_area
+        FROM core.bills b
+        JOIN core.votacao_bills vb ON vb.bill_id = b.id
+        WHERE b.policy_area IS NOT NULL
+        ORDER BY b.policy_area
+    """)).fetchall()
     return {
         "session_labels": main,
         "session_labels_outros_count": outros_count,
         "bill_types": [r[0] for r in bill_types],
+        "policy_areas": [r[0] for r in policy_areas_rows],
     }
 
 

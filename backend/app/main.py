@@ -3,10 +3,10 @@ Vizy API — FastAPI application entry point.
 
 Scheduling strategy
 -------------------
-ETL and AI enrichment jobs are scheduled via APScheduler (BackgroundScheduler)
-to run daily at 03:00 BRT (UTC-3 = 06:00 UTC).
+ETL and AI enrichment jobs are scheduled via APScheduler (BackgroundScheduler).
+All times are in America/Sao_Paulo (BRT, UTC-3).
 
-Schedule overview (all times BRT / America/Sao_Paulo):
+Fixed daily schedule:
   03:00  camara_votes_daily
   03:05  camara_bills_ingest_daily      (discovery + detail backfill, capped at 300/run)
   03:20  camara_bills_tramitacoes_daily (capped at 500/run)
@@ -19,6 +19,17 @@ Schedule overview (all times BRT / America/Sao_Paulo):
   Monday 05:00  camara_politicians_weekly
   Monday 05:05  senado_politicians_weekly
 
+Every-2h conditional triggers (run only if there is pending work):
+  */2h  camara_bills_ingest_daily      — fires if any bill has status IS NULL
+  */2h  camara_bills_tramitacoes_daily — fires if any active bill has no tramitações
+  */2h  camara_bills_enrich_daily      — fires if any bill has short_title IS NULL or policy_area IS NULL
+
+Mutual exclusion:
+  Each of the three 2h-trigger jobs holds a threading.Lock while running.
+  The lock is shared between the 2h trigger and the daily cron trigger for the
+  same job, so they can never overlap.  Ingestion locks and enrichment locks are
+  separate, so ingestion and enrichment can still run concurrently if needed.
+
 Admin endpoints:
   POST /admin/refresh  — triggers data-ingestion ETL jobs only (no AI enrichment)
   POST /admin/enrich   — triggers AI enrichment jobs only
@@ -26,12 +37,14 @@ Admin endpoints:
 
 import os
 import subprocess
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import dotenv_values
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,10 +57,8 @@ from app.routers import auth, politicians, bills, votes, donations, feed, search
 # ---------------------------------------------------------------------------
 # Environment helpers
 # ---------------------------------------------------------------------------
-
 _BACKEND_ENV = dotenv_values(Path(__file__).parent.parent / ".env")
 _ETL_ENV = dotenv_values(Path(__file__).parent.parent.parent / "etl" / ".env")
-
 ETL_DIR = Path(os.environ.get("ETL_DIR", str(Path(__file__).parent.parent / "etl")))
 BACKEND_DIR = Path(__file__).parent.parent  # /app in container, backend/ locally
 
@@ -56,7 +67,6 @@ BACKEND_DIR = Path(__file__).parent.parent  # /app in container, backend/ locall
 # ---------------------------------------------------------------------------
 
 # Data-ingestion ETL jobs (run as `python -m <module>` inside ETL_DIR)
-# These jobs do NOT perform AI enrichment — they only fetch and store raw data.
 ETL_JOBS: dict[str, str] = {
     "camara_votes_daily":             "camara.votes_daily",
     "camara_bills_ingest_daily":      "camara.bills_ingest_daily",
@@ -65,25 +75,30 @@ ETL_JOBS: dict[str, str] = {
     "camara_commissions_sync":        "camara.commissions_sync",
 }
 
-# Weekly data-ingestion jobs (run as `python -m <module>` inside ETL_DIR)
+# Weekly data-ingestion jobs
 WEEKLY_ETL_JOBS: dict[str, str] = {
     "camara_politicians_weekly": "camara.politicians_weekly",
     "senado_politicians_weekly": "senado.politicians_weekly",
 }
 
 # AI enrichment ETL jobs (run as `python -m <module>` inside ETL_DIR)
-# Kept separate from ETL_JOBS so /admin/refresh never triggers AI enrichment.
 AI_ETL_JOBS: dict[str, str] = {
     "camara_bills_enrich_daily": "camara.bills_enrich_daily",
 }
 
 # AI enrichment scripts (run as `python <script>` inside BACKEND_DIR)
 ENRICH_JOBS: dict[str, tuple[str, list[str]]] = {
-    # job_name: (script_filename, extra_args)
     "enrich_speeches":           ("enrich_speeches.py",           ["--limit", "300"]),
     "enrich_legislative_events": ("enrich_legislative_events.py", ["--limit", "200"]),
     "enrich_politicians":        ("enrich_politicians.py",         ["--limit", "50"]),
 }
+
+# ---------------------------------------------------------------------------
+# Per-job threading locks (shared between daily cron and 2h conditional trigger)
+# ---------------------------------------------------------------------------
+_INGEST_LOCK   = threading.Lock()   # shared by bills_ingest_daily (cron + 2h)
+_TRAMIT_LOCK   = threading.Lock()   # shared by bills_tramitacoes_daily (cron + 2h)
+_ENRICH_LOCK   = threading.Lock()   # shared by bills_enrich_daily (cron + 2h)
 
 # ---------------------------------------------------------------------------
 # Subprocess helpers
@@ -135,38 +150,133 @@ def _run_enrich_script(job_name: str, script: str, extra_args: list[str], timeou
     except Exception as exc:
         print(f"[scheduler] {job_name}: error — {exc}")
 
+# ---------------------------------------------------------------------------
+# Conditional check helpers (used by 2h triggers)
+# ---------------------------------------------------------------------------
+
+def _has_bills_missing_detail() -> bool:
+    """Return True if any camara bill has status IS NULL."""
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM core.bills WHERE source = 'camara' AND status IS NULL")
+            ).scalar()
+        return (count or 0) > 0
+    except Exception as exc:
+        print(f"[scheduler] check bills_missing_detail failed: {exc}")
+        return False
+
+
+def _has_bills_missing_tramitacoes() -> bool:
+    """Return True if any active camara bill has no tramitações rows."""
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(text("""
+                SELECT COUNT(*) FROM core.bills b
+                WHERE b.source = 'camara'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM core.legislative_events le WHERE le.bill_id = b.id
+                  )
+                  AND NOT (b.status IS NOT NULL AND (
+                      lower(b.status) LIKE '%arquivad%' OR
+                      lower(b.status) LIKE '%prejudicad%' OR
+                      lower(b.status) LIKE '%encerrad%' OR
+                      lower(b.status) LIKE '%retira%'
+                  ))
+            """)).scalar()
+        return (count or 0) > 0
+    except Exception as exc:
+        print(f"[scheduler] check bills_missing_tramitacoes failed: {exc}")
+        return False
+
+
+def _has_bills_missing_enrichment() -> bool:
+    """Return True if any qualifying camara bill is missing short_title or policy_area."""
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(text("""
+                SELECT COUNT(*) FROM core.bills
+                WHERE source = 'camara'
+                  AND type IN ('PL','PLP','PEC','MPV','PDL','PRC','MSC','TVR','PLN','PDC')
+                  AND ementa IS NOT NULL
+                  AND (short_title IS NULL OR policy_area IS NULL)
+            """)).scalar()
+        return (count or 0) > 0
+    except Exception as exc:
+        print(f"[scheduler] check bills_missing_enrichment failed: {exc}")
+        return False
+
+# ---------------------------------------------------------------------------
+# Locked job runners (used by both cron and 2h triggers)
+# ---------------------------------------------------------------------------
+
+def _run_bills_ingest(source: str = "cron"):
+    """Run bills_ingest_daily under the ingest lock. Skips if already running."""
+    if not _INGEST_LOCK.acquire(blocking=False):
+        print(f"[scheduler] camara_bills_ingest_daily ({source}): skipped — already running")
+        return
+    try:
+        _run_etl_module(
+            "camara_bills_ingest_daily",
+            ETL_JOBS["camara_bills_ingest_daily"],
+            ETL_DIR,
+            timeout=900,
+        )
+    finally:
+        _INGEST_LOCK.release()
+
+
+def _run_bills_tramitacoes(source: str = "cron"):
+    """Run bills_tramitacoes_daily under the tramit lock. Skips if already running."""
+    if not _TRAMIT_LOCK.acquire(blocking=False):
+        print(f"[scheduler] camara_bills_tramitacoes_daily ({source}): skipped — already running")
+        return
+    try:
+        _run_etl_module(
+            "camara_bills_tramitacoes_daily",
+            ETL_JOBS["camara_bills_tramitacoes_daily"],
+            ETL_DIR,
+        )
+    finally:
+        _TRAMIT_LOCK.release()
+
+
+def _run_bills_enrich(source: str = "cron"):
+    """Run bills_enrich_daily under the enrich lock. Skips if already running."""
+    if not _ENRICH_LOCK.acquire(blocking=False):
+        print(f"[scheduler] camara_bills_enrich_daily ({source}): skipped — already running")
+        return
+    try:
+        _run_etl_module(
+            "camara_bills_enrich_daily",
+            AI_ETL_JOBS["camara_bills_enrich_daily"],
+            ETL_DIR,
+            timeout=900,
+        )
+    finally:
+        _ENRICH_LOCK.release()
 
 # ---------------------------------------------------------------------------
 # Scheduler setup
 # ---------------------------------------------------------------------------
 
 def _build_scheduler() -> BackgroundScheduler:
-    """
-    Build and configure the APScheduler instance.
-
-    All cron times are in America/Sao_Paulo (BRT, UTC-3).
-    Ingestion jobs run 03:00–03:45; AI enrichment jobs run 04:00–04:45.
-    This ensures all ingestion is complete before any AI enrichment starts,
-    preventing overlap and DB contention.
-    """
     tz = "America/Sao_Paulo"
     scheduler = BackgroundScheduler(timezone=tz)
 
     # ── Daily data-ingestion jobs (03:00–03:45 BRT) ──────────────────────
-
     scheduler.add_job(
         lambda: _run_etl_module("camara_votes_daily", ETL_JOBS["camara_votes_daily"], ETL_DIR),
         CronTrigger(hour=3, minute=0, timezone=tz),
         id="camara_votes_daily", name="Câmara votes (daily)", replace_existing=True,
     )
     scheduler.add_job(
-        # timeout=900: discovery + up to 300 detail fetches; should finish in ~10 min normally
-        lambda: _run_etl_module("camara_bills_ingest_daily", ETL_JOBS["camara_bills_ingest_daily"], ETL_DIR, timeout=900),
+        lambda: _run_bills_ingest("cron"),
         CronTrigger(hour=3, minute=5, timezone=tz),
         id="camara_bills_ingest_daily", name="Câmara bills ingestion + detail (daily)", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: _run_etl_module("camara_bills_tramitacoes_daily", ETL_JOBS["camara_bills_tramitacoes_daily"], ETL_DIR),
+        lambda: _run_bills_tramitacoes("cron"),
         CronTrigger(hour=3, minute=20, timezone=tz),
         id="camara_bills_tramitacoes_daily", name="Câmara tramitações (daily)", replace_existing=True,
     )
@@ -182,11 +292,8 @@ def _build_scheduler() -> BackgroundScheduler:
     )
 
     # ── Daily AI enrichment jobs (04:00–04:45 BRT) ───────────────────────
-    # All AI jobs fire after 04:00 to ensure ingestion jobs have completed.
-
     scheduler.add_job(
-        # Bills AI enrichment: short_title, summary, policy_area (capped at 200/run)
-        lambda: _run_etl_module("camara_bills_enrich_daily", AI_ETL_JOBS["camara_bills_enrich_daily"], ETL_DIR, timeout=900),
+        lambda: _run_bills_enrich("cron"),
         CronTrigger(hour=4, minute=0, timezone=tz),
         id="camara_bills_enrich_daily", name="Câmara bills AI enrichment (daily)", replace_existing=True,
     )
@@ -206,8 +313,30 @@ def _build_scheduler() -> BackgroundScheduler:
         id="enrich_politicians", name="AI enrich politicians (daily)", replace_existing=True,
     )
 
-    # ── Weekly politician sync (Monday 05:00–05:05 BRT) ──────────────────
+    # ── Every-2h conditional triggers ────────────────────────────────────
+    # Each trigger checks whether there is pending work before running.
+    # The same threading lock is shared with the daily cron job, so the two
+    # can never overlap for the same job.
+    scheduler.add_job(
+        lambda: _has_bills_missing_detail() and _run_bills_ingest("2h-trigger"),
+        IntervalTrigger(hours=2, timezone=tz),
+        id="camara_bills_ingest_2h", name="Câmara bills detail backfill (every 2h, conditional)",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        lambda: _has_bills_missing_tramitacoes() and _run_bills_tramitacoes("2h-trigger"),
+        IntervalTrigger(hours=2, timezone=tz),
+        id="camara_bills_tramitacoes_2h", name="Câmara tramitações backfill (every 2h, conditional)",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        lambda: _has_bills_missing_enrichment() and _run_bills_enrich("2h-trigger"),
+        IntervalTrigger(hours=2, timezone=tz),
+        id="camara_bills_enrich_2h", name="Câmara bills AI enrichment (every 2h, conditional)",
+        replace_existing=True,
+    )
 
+    # ── Weekly politician sync (Monday 05:00–05:05 BRT) ──────────────────
     scheduler.add_job(
         lambda: _run_etl_module("camara_politicians_weekly", WEEKLY_ETL_JOBS["camara_politicians_weekly"], ETL_DIR),
         CronTrigger(day_of_week="mon", hour=5, minute=0, timezone=tz),
@@ -221,7 +350,6 @@ def _build_scheduler() -> BackgroundScheduler:
 
     return scheduler
 
-
 # ---------------------------------------------------------------------------
 # FastAPI lifespan
 # ---------------------------------------------------------------------------
@@ -230,11 +358,10 @@ def _build_scheduler() -> BackgroundScheduler:
 async def lifespan(app: FastAPI):
     scheduler = _build_scheduler()
     scheduler.start()
-    print("[scheduler] APScheduler started — ETL jobs scheduled daily at 03:00 BRT")
+    print("[scheduler] APScheduler started — ETL jobs scheduled (daily cron + every-2h conditional)")
     yield
     scheduler.shutdown(wait=False)
     print("[scheduler] APScheduler stopped")
-
 
 # ---------------------------------------------------------------------------
 # App
@@ -271,7 +398,6 @@ app.include_router(parties.router,     prefix="/parties",     tags=["parties"])
 app.include_router(speeches.router,    prefix="/speeches",    tags=["speeches"])
 app.include_router(digests.router,     prefix="/digests",     tags=["digests"])
 
-
 # ---------------------------------------------------------------------------
 # Health + admin endpoints
 # ---------------------------------------------------------------------------
@@ -299,8 +425,7 @@ def list_schedule(x_admin_key: str | None = Header(None)):
 @app.post("/admin/refresh", tags=["admin"])
 def manual_refresh(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
     """Trigger all data-ingestion ETL jobs immediately (ignores last-run time).
-    AI enrichment jobs are NOT triggered here — use /admin/enrich for that.
-    Requires X-Admin-Key header matching ADMIN_API_KEY env var."""
+    AI enrichment jobs are NOT triggered here — use /admin/enrich for that."""
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
     background_tasks.add_task(_force_run_ingest_etl)
@@ -310,8 +435,7 @@ def manual_refresh(background_tasks: BackgroundTasks, x_admin_key: str | None = 
 @app.post("/admin/enrich", tags=["admin"])
 def manual_enrich(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
     """Trigger all AI enrichment jobs immediately.
-    Separate from /admin/refresh to avoid running enrichment during ingestion.
-    Requires X-Admin-Key header matching ADMIN_API_KEY env var."""
+    Separate from /admin/refresh to avoid running enrichment during ingestion."""
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
     background_tasks.add_task(_force_run_enrich)
@@ -322,12 +446,16 @@ def manual_enrich(background_tasks: BackgroundTasks, x_admin_key: str | None = H
 def _force_run_ingest_etl():
     """Run all data-ingestion ETL jobs sequentially. Does NOT include AI enrichment."""
     for job_name, module in ETL_JOBS.items():
-        _run_etl_module(job_name, module, ETL_DIR)
+        if job_name == "camara_bills_ingest_daily":
+            _run_bills_ingest("admin/refresh")
+        elif job_name == "camara_bills_tramitacoes_daily":
+            _run_bills_tramitacoes("admin/refresh")
+        else:
+            _run_etl_module(job_name, module, ETL_DIR)
 
 
 def _force_run_enrich():
     """Run all AI enrichment jobs sequentially."""
-    for job_name, module in AI_ETL_JOBS.items():
-        _run_etl_module(job_name, module, ETL_DIR)
+    _run_bills_enrich("admin/enrich")
     for job_name, (script, extra_args) in ENRICH_JOBS.items():
         _run_enrich_script(job_name, script, extra_args)

@@ -50,7 +50,8 @@ def _run(limit: int = TRAMIT_LIMIT):
                 (NOT EXISTS (
                     SELECT 1 FROM core.legislative_events le WHERE le.bill_id = b.id
                 )) DESC,
-                b.updated_at DESC NULLS LAST
+                b.presented_at DESC NULLS LAST,
+                b.id DESC
             LIMIT :limit
         """), {"limit": limit}).fetchall()
 

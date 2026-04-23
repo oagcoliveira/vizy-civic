@@ -4,7 +4,7 @@ Daily ETL: AI enrichment for Câmara bills.
 Generates short_title, summary, and policy_area for bills that have an ementa
 but are missing AI enrichment.  Processes up to ENRICH_LIMIT bills per run so
 the job always finishes within the scheduler timeout.  On subsequent runs it
-continues from where it left off (lowest id first).
+continues from where it left off (newest bills first).
 
 This job is intentionally separate from bills_ingest_daily so that:
   - Ingestion (fast, no AI) and enrichment (slow, AI) can be tuned independently.
@@ -117,7 +117,7 @@ def _run(limit: int):
               AND type IN {ENRICH_TYPES}
               AND ementa IS NOT NULL
               AND (short_title IS NULL OR policy_area IS NULL)
-            ORDER BY id
+            ORDER BY presented_at DESC NULLS LAST, id DESC
             LIMIT :limit
         """), {"limit": limit}).fetchall()
 

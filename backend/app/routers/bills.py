@@ -16,6 +16,7 @@ def list_bills(
     types: str | None = Query(None, description="Comma-separated list of bill types, e.g. PL,PEC,MPV"),
     status: str | None = Query(None),
     policy_area: str | None = Query(None),
+    policy_areas: str | None = Query(None, description="Comma-separated policy areas, e.g. Saúde,Educação"),
     year: int | None = Query(None),
     search: str | None = Query(None),
     author_politician_id: int | None = Query(None),
@@ -39,9 +40,13 @@ def list_bills(
     if status:
         where.append("status = :status")
         params["status"] = status
-    if policy_area:
-        where.append("policy_area = :policy_area")
-        params["policy_area"] = policy_area
+    # Support both ?policy_area=X (single, legacy) and ?policy_areas=X,Y (multi-select)
+    _pa_list = [a.strip() for a in policy_areas.split(",") if a.strip()] if policy_areas else ([policy_area] if policy_area else [])
+    if _pa_list:
+        pa_placeholders = ", ".join(f":pa_{i}" for i in range(len(_pa_list)))
+        where.append(f"policy_area IN ({pa_placeholders})")
+        for i, a in enumerate(_pa_list):
+            params[f"pa_{i}"] = a
     if year:
         where.append("year = :year")
         params["year"] = year
@@ -69,6 +74,18 @@ def list_bills(
     """), params).scalar()
 
     return {"total": total, "page": page, "items": [dict(r._mapping) for r in rows]}
+
+
+@router.get("/policy-areas")
+def get_policy_areas(db: Session = Depends(get_db)):
+    """Returns all distinct policy_area values in the bills table."""
+    rows = db.execute(text("""
+        SELECT DISTINCT policy_area
+        FROM core.bills
+        WHERE policy_area IS NOT NULL
+        ORDER BY policy_area
+    """)).fetchall()
+    return {"policy_areas": [r[0] for r in rows]}
 
 
 @router.get("/{bill_id}")

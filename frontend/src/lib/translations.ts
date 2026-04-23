@@ -96,6 +96,7 @@ const pt = {
   "bills.subtitle":      "proposições registradas — Câmara dos Deputados",
   "bills.search":        "Buscar por título ou ementa...",
   "bills.all_types":     "Todos os tipos",
+  "bills.all_policy_areas": "Todas as áreas",
   "bills.clear":         "Limpar filtros",
   "bills.empty":         "Nenhuma proposição encontrada.",
   "bills.col_type":      "Tipo",
@@ -140,6 +141,7 @@ const pt = {
   "votes.all_types":        "Todos os tipos",
   "votes.all_commissions":  "Todas as comissões",
   "votes.all_bill_types":   "Todos os tipos de proposição",
+  "votes.all_policy_areas":  "Todas as áreas temáticas",
   "votes.help_commissions": "Siglas das comissões",
   "votes.help_bill_types":  "Tipos de proposição",
 
@@ -428,6 +430,7 @@ const en: Record<keyof typeof pt, string> = {
   "bills.subtitle":      "bills on record — Chamber of Deputies",
   "bills.search":        "Search by title or description...",
   "bills.all_types":     "All types",
+  "bills.all_policy_areas": "All policy areas",
   "bills.clear":         "Clear filters",
   "bills.empty":         "No bills found.",
   "bills.col_type":      "Type",
@@ -472,6 +475,7 @@ const en: Record<keyof typeof pt, string> = {
   "votes.all_types":        "All types",
   "votes.all_commissions":  "All committees",
   "votes.all_bill_types":   "All bill types",
+  "votes.all_policy_areas":  "All policy areas",
   "votes.help_commissions": "Committee acronyms",
   "votes.help_bill_types":  "Bill types",
 

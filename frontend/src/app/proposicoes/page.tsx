@@ -156,7 +156,23 @@ export default function ProposicoesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(DEFAULT_SELECTED);
+  const [selectedPolicyAreas, setSelectedPolicyAreas] = useState<Set<string>>(new Set());
+  const [availablePolicyAreas, setAvailablePolicyAreas] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Load available policy areas once
+  useEffect(() => {
+    fetch(`${API}/bills/policy-areas`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.policy_areas) {
+          setAvailablePolicyAreas(
+            (data.policy_areas as string[]).map((a) => ({ value: a, label: a }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -175,6 +191,9 @@ export default function ProposicoesPage() {
     if (selectedTypes.size > 0 && selectedTypes.size < BILL_TYPES.length) {
       params.set("types", Array.from(selectedTypes).join(","));
     }
+    if (selectedPolicyAreas.size > 0) {
+      params.set("policy_areas", Array.from(selectedPolicyAreas).join(","));
+    }
 
     setLoading(true);
     fetch(`${API}/bills/?${params}`)
@@ -185,20 +204,22 @@ export default function ProposicoesPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [page, debouncedSearch, selectedTypes]);
+  }, [page, debouncedSearch, selectedTypes, selectedPolicyAreas]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, selectedTypes]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, selectedTypes, selectedPolicyAreas]);
 
   const isDefaultFilter =
     search === "" &&
     selectedTypes.size === DEFAULT_SELECTED.size &&
-    Array.from(selectedTypes).every((v) => DEFAULT_SELECTED.has(v));
+    Array.from(selectedTypes).every((v) => DEFAULT_SELECTED.has(v)) &&
+    selectedPolicyAreas.size === 0;
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const handleClear = () => {
     setSearch("");
     setSelectedTypes(DEFAULT_SELECTED);
+    setSelectedPolicyAreas(new Set());
   };
 
   return (
@@ -225,6 +246,14 @@ export default function ProposicoesPage() {
           onChange={(next) => setSelectedTypes(next)}
           placeholder={t("bills.all_types")}
         />
+        {availablePolicyAreas.length > 0 && (
+          <MultiSelect
+            options={availablePolicyAreas}
+            selected={selectedPolicyAreas}
+            onChange={(next) => setSelectedPolicyAreas(next)}
+            placeholder={t("bills.all_policy_areas")}
+          />
+        )}
         {!isDefaultFilter && (
           <Button variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground">
             {t("bills.clear")}

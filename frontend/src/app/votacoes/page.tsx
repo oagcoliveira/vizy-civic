@@ -161,6 +161,76 @@ function formatDate(ts: string | null) {
   return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// ── Policy area multi-select ──────────────────────────────────────────────────
+function PolicyAreaSelect({
+  options,
+  selected,
+  onChange,
+  placeholder,
+}: {
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+  const allSelected = selected.size === options.length;
+  const noneSelected = selected.size === 0;
+  const toggle = (v: string) => {
+    const next = new Set(selected);
+    if (next.has(v)) next.delete(v); else next.add(v);
+    onChange(next);
+  };
+  const summary = noneSelected || allSelected
+    ? placeholder
+    : selected.size === 1
+    ? Array.from(selected)[0]
+    : `${selected.size} áreas`;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="h-9 min-w-[160px] rounded-md border border-input bg-background px-3 text-sm shadow-sm text-left flex items-center justify-between gap-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <span className="truncate text-muted-foreground">{summary}</span>
+        <svg className="h-4 w-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 rounded-md border bg-popover shadow-md text-sm">
+          <div className="max-h-72 overflow-y-auto py-1">
+            {options.map((opt) => (
+              <div
+                key={opt}
+                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-muted/50"
+                onClick={() => toggle(opt)}
+              >
+                <input
+                  type="checkbox"
+                  readOnly
+                  checked={selected.has(opt)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                <span>{opt}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function VotacoesPage() {
   const { t } = useLanguage();
   const [items, setItems] = useState<Votacao[]>([]);
@@ -173,6 +243,8 @@ export default function VotacoesPage() {
   const [sessionLabels, setSessionLabels] = useState<string[]>([]);
   const [sessionOutrosCount, setSessionOutrosCount] = useState(0);
   const [billTypes, setBillTypes] = useState<string[]>([]);
+  const [policyAreaOptions, setPolicyAreaOptions] = useState<string[]>([]);
+  const [selectedPolicyAreas, setSelectedPolicyAreas] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Load filter options once
@@ -183,6 +255,7 @@ export default function VotacoesPage() {
         setSessionLabels(d.session_labels ?? []);
         setSessionOutrosCount(d.session_labels_outros_count ?? 0);
         setBillTypes(d.bill_types ?? []);
+        setPolicyAreaOptions(d.policy_areas ?? []);
       })
       .catch(() => {});
   }, []);
@@ -211,6 +284,7 @@ export default function VotacoesPage() {
     if (voteTypeFilter) params.set("vote_type", voteTypeFilter);
     if (sessionFilter)  params.set("session_label", sessionFilter);
     if (billTypeFilter) params.set("bill_type", billTypeFilter);
+    if (selectedPolicyAreas.size > 0) params.set("policy_areas", Array.from(selectedPolicyAreas).join(","));
 
     setLoading(true);
     fetch(`${API}/votes/?${params}`)
@@ -220,15 +294,16 @@ export default function VotacoesPage() {
         setTotal(data.total ?? 0);
         setLoading(false);
       });
-  }, [page, resultFilter, voteTypeFilter, sessionFilter, billTypeFilter]);
+  }, [page, resultFilter, voteTypeFilter, sessionFilter, billTypeFilter, selectedPolicyAreas]);
 
   // Reset to page 1 when any filter changes
-  useEffect(() => { setPage(1); }, [resultFilter, voteTypeFilter, sessionFilter, billTypeFilter]);
+  useEffect(() => { setPage(1); }, [resultFilter, voteTypeFilter, sessionFilter, billTypeFilter, selectedPolicyAreas]);
 
-  const hasFilter = resultFilter || voteTypeFilter || sessionFilter || billTypeFilter;
+  const hasFilter = resultFilter || voteTypeFilter || sessionFilter || billTypeFilter || selectedPolicyAreas.size > 0;
   const clearAll = () => {
     setResultFilter(""); setVoteTypeFilter("");
     setSessionFilter(""); setBillTypeFilter("");
+    setSelectedPolicyAreas(new Set());
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -280,9 +355,17 @@ export default function VotacoesPage() {
               <option key={bt} value={bt}>{bt}</option>
             ))}
           </select>
-          <AcronymHelp titleKey="votes.help_bill_types" mapPt={BILL_TYPE_NAMES_PT} mapEn={BILL_TYPE_NAMES_EN} />
+           <AcronymHelp titleKey="votes.help_bill_types" mapPt={BILL_TYPE_NAMES_PT} mapEn={BILL_TYPE_NAMES_EN} />
         </div>
-
+        {/* Policy area multi-select */}
+        {policyAreaOptions.length > 0 && (
+          <PolicyAreaSelect
+            options={policyAreaOptions}
+            selected={selectedPolicyAreas}
+            onChange={setSelectedPolicyAreas}
+            placeholder={t("votes.all_policy_areas")}
+          />
+        )}
         {hasFilter && (
           <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground">
             {t("votes.clear")}
