@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -101,6 +102,8 @@ def generate_speech_enrichment(
         messages=[{"role": "user", "content": prompt}],
     )
     raw = message.content[0].text.strip()
+    if not raw:
+        raise ValueError("Anthropic returned an empty response — possible rate limit or content filter")
     if "```" in raw:
         raw = raw.split("```")[1].lstrip("json").strip()
     result = json.loads(raw)
@@ -161,6 +164,10 @@ def run(limit: int):
         except Exception as exc:
             print(f"  [{ok + failed + 1}/{len(batch)}] {label} — FAILED: {exc}", file=sys.stderr)
             failed += 1
+
+        finally:
+            # Respect Anthropic rate limits: small delay between every call
+            time.sleep(0.5)
 
     print(f"\nDone — {ok} enriched, {failed} failed.")
 

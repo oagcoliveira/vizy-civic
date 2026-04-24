@@ -41,6 +41,7 @@ import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -108,6 +109,22 @@ def _build_etl_env() -> dict:
     return {**os.environ, **_ETL_ENV, **_BACKEND_ENV}
 
 
+def _write_failed_run(job_name: str, error: str) -> None:
+    """Write a failed etl_runs entry from the scheduler side (e.g., on timeout/crash)."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO jobs.etl_runs
+                        (job_name, started_at, finished_at, status, error_message)
+                    VALUES (:job, now(), now(), 'failed', :error)
+                """),
+                {"job": job_name, "error": error},
+            )
+    except Exception as exc:
+        print(f"[scheduler] _write_failed_run failed: {exc}")
+
+
 def _run_etl_module(job_name: str, module: str, cwd: Path, timeout: int = 600):
     env = _build_etl_env()
     if not env.get("DATABASE_URL") or not cwd.exists():
@@ -125,8 +142,10 @@ def _run_etl_module(job_name: str, module: str, cwd: Path, timeout: int = 600):
         print(f"[scheduler] {job_name}: finished")
     except subprocess.TimeoutExpired:
         print(f"[scheduler] {job_name}: timed out after {timeout}s")
+        _write_failed_run(job_name, f"subprocess timed out after {timeout}s")
     except Exception as exc:
         print(f"[scheduler] {job_name}: error — {exc}")
+        _write_failed_run(job_name, str(exc))
 
 
 def _run_enrich_script(job_name: str, script: str, extra_args: list[str], timeout: int = 900):
@@ -147,8 +166,10 @@ def _run_enrich_script(job_name: str, script: str, extra_args: list[str], timeou
         print(f"[scheduler] {job_name}: finished")
     except subprocess.TimeoutExpired:
         print(f"[scheduler] {job_name}: timed out after {timeout}s")
+        _write_failed_run(job_name, f"subprocess timed out after {timeout}s")
     except Exception as exc:
         print(f"[scheduler] {job_name}: error — {exc}")
+        _write_failed_run(job_name, str(exc))
 
 # ---------------------------------------------------------------------------
 # Conditional check helpers (used by 2h triggers)
@@ -251,7 +272,7 @@ def _run_bills_enrich(source: str = "cron"):
             "camara_bills_enrich_daily",
             AI_ETL_JOBS["camara_bills_enrich_daily"],
             ETL_DIR,
-            timeout=900,
+            timeout=1800,  # increased from 900s — enriches 200 bills via Anthropic API
         )
     finally:
         _ENRICH_LOCK.release()
@@ -280,8 +301,32 @@ def _build_scheduler() -> BackgroundScheduler:
         CronTrigger(hour=3, minute=20, timezone=tz),
         id="camara_bills_tramitacoes_daily", name="Câmara tramitações (daily)", replace_existing=True,
     )
+    def _run_speeches_daily():
+        """Run speeches_daily and emit a warning when 0 speeches are fetched on a weekday."""
+        _run_etl_module("camara_speeches_daily", ETL_JOBS["camara_speeches_daily"], ETL_DIR)
+        # Check if today is a weekday (Mon=0 … Fri=4) in BRT and the run fetched nothing.
+        # A zero-fetch on a weekday usually means the Câmara API was unavailable.
+        now_brt = datetime.now(ZoneInfo("America/Sao_Paulo"))
+        if now_brt.weekday() < 5:  # Mon–Fri
+            try:
+                with engine.connect() as conn:
+                    last = conn.execute(
+                        text("""
+                            SELECT fetched FROM jobs.etl_runs
+                            WHERE job_name = 'camara_speeches_daily'
+                            ORDER BY finished_at DESC LIMIT 1
+                        """)
+                    ).fetchone()
+                if last and (last[0] or 0) == 0:
+                    print(
+                        "[scheduler] camara_speeches_daily: WARNING — 0 speeches fetched on a weekday. "
+                        "The Câmara /discursos API may have been unavailable."
+                    )
+            except Exception as exc:
+                print(f"[scheduler] camara_speeches_daily: could not check fetch count: {exc}")
+
     scheduler.add_job(
-        lambda: _run_etl_module("camara_speeches_daily", ETL_JOBS["camara_speeches_daily"], ETL_DIR),
+        _run_speeches_daily,
         CronTrigger(hour=3, minute=35, timezone=tz),
         id="camara_speeches_daily", name="Câmara speeches (daily)", replace_existing=True,
     )
