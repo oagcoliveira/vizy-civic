@@ -38,6 +38,7 @@ def list_bills(
     policy_areas: str | None = Query(None, description="Comma-separated policy areas, e.g. Saúde,Educação"),
     year: int | None = Query(None),
     search: str | None = Query(None),
+    exclude_types: str | None = Query(None, description="Comma-separated bill types to exclude, e.g. REQ,MSC"),
     author_politician_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, le=100),
@@ -72,6 +73,12 @@ def list_bills(
     if search:
         where.append("(title ILIKE :search OR ementa ILIKE :search)")
         params["search"] = f"%{search}%"
+    _excl_list = [t.strip() for t in exclude_types.split(",") if t.strip()] if exclude_types else []
+    if _excl_list:
+        excl_placeholders = ", ".join(f":excl_{i}" for i in range(len(_excl_list)))
+        where.append(f"type NOT IN ({excl_placeholders})")
+        for i, t in enumerate(_excl_list):
+            params[f"excl_{i}"] = t
     if author_politician_id:
         where.append("author_politician_id = :author_politician_id")
         params["author_politician_id"] = author_politician_id

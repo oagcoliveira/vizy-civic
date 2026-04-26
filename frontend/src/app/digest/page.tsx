@@ -270,7 +270,7 @@ function DigestForm({
       setBillLoading(true);
       try {
         const res = await api.get("/bills/", {
-          params: { search: billSearch, page_size: 8, page: 1 },
+          params: { search: billSearch, page_size: 8, page: 1, exclude_types: "REQ,MSC" },
         });
         setBillResults(res.data.items || []);
       } catch {
