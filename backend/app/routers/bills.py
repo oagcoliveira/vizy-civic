@@ -475,41 +475,6 @@ def _run_bill_enrichment(bill_id: int) -> None:
         lock.release()
 
 
-@router.post("/{bill_id}/enrich/debug", status_code=200)
-def enrich_bill_debug(
-    bill_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Synchronous debug version of the enrich endpoint.
-    Runs the enrichment in-process and returns a log of what happened.
-    Admin-only (oagcoliveira@gmail.com).
-    """
-    import io, traceback
-    from contextlib import redirect_stdout
-
-    if current_user.email != "oagcoliveira@gmail.com":
-        raise HTTPException(status_code=403, detail="Admin only")
-
-    buf = io.StringIO()
-    error = None
-    try:
-        with redirect_stdout(buf):
-            _run_bill_enrichment(bill_id)
-    except Exception as exc:
-        error = traceback.format_exc()
-
-    return {
-        "bill_id": bill_id,
-        "log": buf.getvalue(),
-        "error": error,
-        "etl_dir": str(_ETL_DIR),
-        "etl_dir_exists": _ETL_DIR.exists(),
-        "sys_path": sys.path[:5],
-    }
-
-
 @router.post("/{bill_id}/enrich", status_code=status.HTTP_202_ACCEPTED)
 def enrich_bill(
     bill_id: int,
