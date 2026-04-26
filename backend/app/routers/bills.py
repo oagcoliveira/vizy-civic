@@ -13,9 +13,13 @@ from app.database import get_db
 from app.models.auth import BillTrack, User
 from app.routers.auth import get_current_user
 
-# ETL_DIR: in the Docker container this is /app/etl; locally it's backend/../etl.
-# We read the same env var that main.py uses so the two are always in sync.
-_ETL_DIR = Path(os.environ.get("ETL_DIR", str(Path(__file__).parent.parent / "etl")))
+# ETL_DIR: in the Docker container the layout is:
+#   /app/app/routers/bills.py  <- __file__
+#   /app/etl/                  <- ETL modules
+# So we need .parent x3 from bills.py to reach /app, then + "etl".
+# Locally the layout is backend/app/routers/bills.py -> backend/../etl, same depth.
+# We also honour the ETL_DIR env var (set by main.py) if present.
+_ETL_DIR = Path(os.environ.get("ETL_DIR", str(Path(__file__).parent.parent.parent / "etl")))
 
 # One lock per bill to prevent concurrent enrichment of the same bill
 _enrich_locks: dict[int, threading.Lock] = {}
