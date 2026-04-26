@@ -17,10 +17,13 @@ def search(
 
     politicians = db.execute(
         text("""
-            SELECT id, name, short_name, state, current_office, photo_url
-            FROM core.politicians
-            WHERE to_tsvector('portuguese', name) @@ plainto_tsquery('portuguese', :q)
-               OR name ILIKE :like
+            SELECT p.id, p.short_name, p.name, p.state, p.current_office,
+                   p.photo_url, pa.acronym AS party_acronym
+            FROM core.politicians p
+            LEFT JOIN core.parties pa ON pa.id = p.party_id
+            WHERE p.fts @@ plainto_tsquery('portuguese', :q)
+               OR p.name ILIKE :like
+               OR p.short_name ILIKE :like
             LIMIT 10
         """),
         {"q": q, "like": f"%{q}%"},
@@ -29,12 +32,13 @@ def search(
 
     bills = db.execute(
         text("""
-            SELECT id, type, number, year, short_title, status, policy_area
+            SELECT id, type, number, year, short_title, ementa, status, policy_area
             FROM core.bills
-            WHERE to_tsvector('portuguese', coalesce(short_title, title)) @@ plainto_tsquery('portuguese', :q)
-            LIMIT 10
+            WHERE fts @@ plainto_tsquery('portuguese', :q)
+               OR ementa ILIKE :like
+               OR short_title ILIKE :like
         """),
-        {"q": q},
+        {"q": q, "like": f"%{q}%"},
     ).fetchall()
     results["bills"] = [dict(r._mapping) for r in bills]
 
@@ -43,8 +47,8 @@ def search(
             SELECT s.id, s.politician_id, p.short_name AS politician_name,
                    s.delivered_at, s.summary
             FROM core.speeches s
-            JOIN core.politicians p ON p.id = s.politician_id
-            WHERE to_tsvector('portuguese', coalesce(s.summary, '')) @@ plainto_tsquery('portuguese', :q)
+            LEFT JOIN core.politicians p ON p.id = s.politician_id
+            WHERE s.fts @@ plainto_tsquery('portuguese', :q)
             LIMIT 10
         """),
         {"q": q},
