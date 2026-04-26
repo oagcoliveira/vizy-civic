@@ -56,7 +56,7 @@ export default function BuscaPage() {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await fetch(`${API}/search?q=${encodeURIComponent(query)}`);
+        const r = await fetch(`${API}/search/?q=${encodeURIComponent(query)}`);
         if (r.ok) setResults(await r.json());
       } finally {
         setLoading(false);
