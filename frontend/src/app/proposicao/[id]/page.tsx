@@ -8,8 +8,6 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
-const ADMIN_EMAIL = "oagcoliveira@gmail.com";
-
 type Bill = {
   id: number;
   source: string;
@@ -71,7 +69,7 @@ type EnrichStatus = "idle" | "loading" | "success" | "error";
 
 export default function BillPage({ params }: { params: { id: string } }) {
   const { t } = useLanguage();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [bill, setBill] = useState<Bill | null>(null);
   const [votacoes, setVotacoes] = useState<VotacaoLink[]>([]);
   const [events, setEvents] = useState<LegislativeEvent[]>([]);
@@ -216,8 +214,8 @@ export default function BillPage({ params }: { params: { id: string } }) {
             <Badge variant="secondary" className="text-xs">{bill.policy_area}</Badge>
           )}
           <div className="ml-auto flex items-center gap-2">
-            {/* Enrich button — only shown to the admin user when the bill has missing data */}
-            {user?.email === ADMIN_EMAIL && bill.needs_enrichment && (
+            {/* Enrich button — shown to any logged-in user when the bill has missing data */}
+            {token && bill.needs_enrichment && (
               <button
                 onClick={handleEnrich}
                 disabled={enrichStatus === "loading"}

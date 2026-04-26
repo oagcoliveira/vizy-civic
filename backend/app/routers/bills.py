@@ -1,6 +1,8 @@
+import json
 import os
-import subprocess
+import sys
 import threading
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -11,12 +13,9 @@ from app.database import get_db
 from app.models.auth import BillTrack, User
 from app.routers.auth import get_current_user
 
-# Admin e-mail — only this user may trigger per-bill enrichment
-ADMIN_EMAIL = "oagcoliveira@gmail.com"
-
-# Paths resolved relative to this file so they work both locally and in Railway
-_BACKEND_DIR = Path(__file__).parent.parent.parent          # backend/
-_ETL_DIR     = _BACKEND_DIR.parent / "etl"                  # etl/
+# ETL_DIR: in the Docker container this is /app/etl; locally it's backend/../etl.
+# We read the same env var that main.py uses so the two are always in sync.
+_ETL_DIR = Path(os.environ.get("ETL_DIR", str(Path(__file__).parent.parent / "etl")))
 
 # One lock per bill to prevent concurrent enrichment of the same bill
 _enrich_locks: dict[int, threading.Lock] = {}
@@ -241,38 +240,233 @@ def _get_bill_lock(bill_id: int) -> threading.Lock:
 
 
 def _run_bill_enrichment(bill_id: int) -> None:
-    """Background task: run the full enrichment pipeline for one bill."""
+    """
+    Background task: run the full enrichment pipeline for one bill, in-process.
+
+    Runs four sequential steps:
+      1. Detail ingest  — status, author, full_text_url  (Câmara API)
+      2. Tramitações    — legislative events              (Câmara API)
+      3. AI bill        — short_title, summary, policy_area (Claude Haiku)
+      4. AI events      — plain-language event summaries  (Claude Haiku)
+
+    The ETL modules are imported dynamically from ETL_DIR so this works both
+    locally (etl/ next to backend/) and in the Docker container (/app/etl/).
+    """
     lock = _get_bill_lock(bill_id)
     if not lock.acquire(blocking=False):
         print(f"[enrich_bill] bill_id={bill_id}: already running — skipped", flush=True)
         return
+
     try:
-        from dotenv import dotenv_values
-        env = {
-            **os.environ,
-            **dotenv_values(_ETL_DIR / ".env"),
-            **dotenv_values(_BACKEND_DIR / ".env"),
-        }
-        if not env.get("DATABASE_URL"):
-            print(f"[enrich_bill] bill_id={bill_id}: DATABASE_URL not set — aborting", flush=True)
-            return
-        if not _ETL_DIR.exists():
-            print(f"[enrich_bill] bill_id={bill_id}: ETL_DIR not found at {_ETL_DIR} — aborting", flush=True)
+        etl_dir = str(_ETL_DIR)
+        if etl_dir not in sys.path:
+            sys.path.insert(0, etl_dir)
+
+        # Import ETL helpers (safe to do after sys.path is patched)
+        from camara.client import get as camara_get                          # noqa: E402
+        from camara.bills_ingest_daily import (                              # noqa: E402
+            _fetch_bill_detail, _resolve_author_politician_id
+        )
+        from camara.bills_enrich_daily import generate_ai_enrichment, ENRICH_TYPES  # noqa: E402
+        from db import engine as etl_engine                                  # noqa: E402
+        from sqlalchemy import text as sa_text                               # noqa: E402
+        import anthropic, json as _json, time as _time                       # noqa: E402
+
+        print(f"[enrich_bill] bill_id={bill_id}: starting enrichment", flush=True)
+
+        # ------------------------------------------------------------------ #
+        # Resolve bill from DB
+        # ------------------------------------------------------------------ #
+        with etl_engine.connect() as conn:
+            row = conn.execute(sa_text("""
+                SELECT id, external_id, source, status, short_title, policy_area,
+                       ementa, type
+                FROM core.bills WHERE id = :id
+            """), {"id": bill_id}).fetchone()
+
+        if not row:
+            print(f"[enrich_bill] bill_id={bill_id}: not found in DB", flush=True)
             return
 
-        print(f"[enrich_bill] bill_id={bill_id}: starting subprocess", flush=True)
-        subprocess.run(
-            ["python", "-m", "camara.bill_enrich_single", "--bill-id", str(bill_id)],
-            cwd=str(_ETL_DIR),
-            env=env,
-            timeout=300,   # 5 min is more than enough for a single bill
-            check=False,
-        )
-        print(f"[enrich_bill] bill_id={bill_id}: subprocess finished", flush=True)
-    except subprocess.TimeoutExpired:
-        print(f"[enrich_bill] bill_id={bill_id}: timed out after 300s", flush=True)
+        external_id = row.external_id
+
+        # ------------------------------------------------------------------ #
+        # Step 1: Detail ingest (Câmara API)
+        # ------------------------------------------------------------------ #
+        print(f"[enrich_bill] bill_id={bill_id}: step 1 — detail ingest", flush=True)
+        detail = _fetch_bill_detail(external_id)
+        if detail:
+            author_politician_id = _resolve_author_politician_id(detail.get("author_external_id"))
+            with etl_engine.begin() as conn:
+                conn.execute(sa_text("""
+                    UPDATE core.bills SET
+                        status               = COALESCE(:status,               status),
+                        full_text_url        = COALESCE(:full_text_url,        full_text_url),
+                        author_label         = COALESCE(:author_label,         author_label),
+                        author_politician_id = COALESCE(:author_politician_id, author_politician_id),
+                        updated_at           = now()
+                    WHERE id = :id
+                """), {
+                    "id": bill_id,
+                    "status": detail.get("status"),
+                    "full_text_url": detail.get("full_text_url"),
+                    "author_label": detail.get("author_label"),
+                    "author_politician_id": author_politician_id,
+                })
+            print(f"[enrich_bill] bill_id={bill_id}: step 1 done — status={detail.get('status')!r}", flush=True)
+        else:
+            print(f"[enrich_bill] bill_id={bill_id}: step 1 — no detail returned from API", flush=True)
+
+        # ------------------------------------------------------------------ #
+        # Step 2: Tramitações ingest (Câmara API)
+        # ------------------------------------------------------------------ #
+        print(f"[enrich_bill] bill_id={bill_id}: step 2 — tramitações ingest", flush=True)
+        try:
+            events = camara_get(f"/proposicoes/{external_id}/tramitacoes").get("dados", [])
+        except Exception as e:
+            print(f"[enrich_bill] bill_id={bill_id}: step 2 WARNING — {e}", flush=True)
+            events = []
+
+        if events:
+            rows_to_insert = []
+            for ev in events:
+                raw_date = ev.get("dataHora") or ev.get("data")
+                rows_to_insert.append({
+                    "bill_id": bill_id,
+                    "sequence": ev.get("sequencia", 0),
+                    "event_date": raw_date[:10] if raw_date else None,
+                    "stage": (ev.get("descricaoTramitacao") or "")[:255] or None,
+                    "description": ev.get("descricaoSituacao") or None,
+                    "venue": (ev.get("siglaOrgao") or "")[:100] or None,
+                })
+            with etl_engine.begin() as conn:
+                result = conn.execute(sa_text("""
+                    INSERT INTO core.legislative_events
+                        (bill_id, sequence, event_date, stage, description, venue)
+                    VALUES
+                        (:bill_id, :sequence, :event_date, :stage, :description, :venue)
+                    ON CONFLICT (bill_id, sequence) DO NOTHING
+                """), rows_to_insert)
+                inserted = result.rowcount
+            print(f"[enrich_bill] bill_id={bill_id}: step 2 done — {inserted} new events", flush=True)
+        else:
+            print(f"[enrich_bill] bill_id={bill_id}: step 2 — no events returned", flush=True)
+
+        # Re-read bill to get fresh ementa/type after potential step-1 update
+        with etl_engine.connect() as conn:
+            row = conn.execute(sa_text("""
+                SELECT id, type, number, year, title, ementa, short_title, policy_area
+                FROM core.bills WHERE id = :id
+            """), {"id": bill_id}).fetchone()
+
+        # ------------------------------------------------------------------ #
+        # Step 3: AI bill enrichment (Claude Haiku)
+        # ------------------------------------------------------------------ #
+        print(f"[enrich_bill] bill_id={bill_id}: step 3 — AI bill enrichment", flush=True)
+        if (
+            row
+            and row.type in ENRICH_TYPES
+            and row.ementa
+            and (row.short_title is None or row.policy_area is None)
+        ):
+            try:
+                ai = generate_ai_enrichment(
+                    ementa=row.ementa,
+                    title=row.title,
+                    bill_type=row.type,
+                    number=row.number,
+                    year=row.year,
+                )
+                if any(ai.values()):
+                    with etl_engine.begin() as conn:
+                        conn.execute(sa_text("""
+                            UPDATE core.bills SET
+                                short_title = COALESCE(:short_title, short_title),
+                                summary     = COALESCE(:summary,     summary),
+                                policy_area = COALESCE(:policy_area, policy_area),
+                                updated_at  = now()
+                            WHERE id = :id
+                        """), {
+                            "id": bill_id,
+                            "short_title": ai.get("short_title"),
+                            "summary": ai.get("summary"),
+                            "policy_area": ai.get("policy_area"),
+                        })
+                    print(f"[enrich_bill] bill_id={bill_id}: step 3 done — short_title={ai.get('short_title')!r}", flush=True)
+                else:
+                    print(f"[enrich_bill] bill_id={bill_id}: step 3 — AI returned empty result", flush=True)
+            except Exception as exc:
+                print(f"[enrich_bill] bill_id={bill_id}: step 3 FAILED — {exc}", flush=True)
+        else:
+            print(f"[enrich_bill] bill_id={bill_id}: step 3 — skipped (already enriched or no ementa)", flush=True)
+
+        # ------------------------------------------------------------------ #
+        # Step 4: AI legislative-event enrichment (Claude Haiku)
+        # ------------------------------------------------------------------ #
+        print(f"[enrich_bill] bill_id={bill_id}: step 4 — AI event enrichment", flush=True)
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+        if anthropic_key:
+            with etl_engine.connect() as conn:
+                event_rows = conn.execute(sa_text("""
+                    SELECT id, stage, description, venue
+                    FROM core.legislative_events
+                    WHERE bill_id = :bid
+                      AND summary IS NULL
+                      AND (stage IS NOT NULL OR description IS NOT NULL)
+                    ORDER BY sequence ASC
+                """), {"bid": bill_id}).fetchall()
+
+            event_list = [dict(r._mapping) for r in event_rows]
+            ok = 0
+            for item in event_list:
+                try:
+                    parts = []
+                    if item["stage"]:
+                        parts.append(f"Fase: {item['stage']}")
+                    if item["description"]:
+                        parts.append(f"Situação: {item['description']}")
+                    if item["venue"]:
+                        parts.append(f"Órgão: {item['venue']}")
+                    if not parts:
+                        continue
+
+                    prompt = (
+                        "Você é um assistente de tecnologia cívica. Traduza esta etapa legislativa burocrática "
+                        "para uma frase curta e clara em português simples (máximo 10 palavras), "
+                        "como se explicasse para um cidadão leigo.\n\n"
+                        + "\n".join(parts)
+                        + '\n\nResponda APENAS com JSON no formato: {"label": "frase em português simples"}'
+                    )
+                    client = anthropic.Anthropic(api_key=anthropic_key)
+                    msg = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=100,
+                        messages=[{"role": "user", "content": prompt}],
+                    )
+                    raw = msg.content[0].text.strip()
+                    if "```" in raw:
+                        raw = raw.split("```")[1].lstrip("json").strip()
+                    label = _json.loads(raw).get("label")
+                    if label:
+                        with etl_engine.begin() as conn:
+                            conn.execute(
+                                sa_text("UPDATE core.legislative_events SET summary = :s WHERE id = :id"),
+                                {"s": label, "id": item["id"]},
+                            )
+                        ok += 1
+                except Exception as exc:
+                    print(f"[enrich_bill] bill_id={bill_id}: step 4 event id={item['id']} FAILED — {exc}", flush=True)
+                finally:
+                    _time.sleep(0.3)
+
+            print(f"[enrich_bill] bill_id={bill_id}: step 4 done — {ok}/{len(event_list)} events enriched", flush=True)
+        else:
+            print(f"[enrich_bill] bill_id={bill_id}: step 4 — skipped (ANTHROPIC_API_KEY not set)", flush=True)
+
+        print(f"[enrich_bill] bill_id={bill_id}: all steps complete", flush=True)
+
     except Exception as exc:
-        print(f"[enrich_bill] bill_id={bill_id}: error — {exc}", flush=True)
+        print(f"[enrich_bill] bill_id={bill_id}: unexpected error — {exc}", flush=True)
     finally:
         lock.release()
 
@@ -287,18 +481,15 @@ def enrich_bill(
     """
     Trigger the full enrichment pipeline for a single Câmara bill.
 
-    Runs sequentially in the background:
+    Runs sequentially in the background (in-process):
       1. Detail ingest  — status, author, full_text_url  (Câmara API)
       2. Tramitações    — legislative events              (Câmara API)
       3. AI bill        — short_title, summary, policy_area (Claude Haiku)
       4. AI events      — plain-language event summaries  (Claude Haiku)
 
-    Access is restricted to the admin user.
+    Any authenticated user may trigger this.
     Returns 409 if the bill is already fully enriched.
     """
-    if current_user.email != ADMIN_EMAIL:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     # Verify the bill exists and is a Câmara bill
     row = db.execute(text("""
         SELECT id, source, status, short_title, policy_area, ementa, type,
