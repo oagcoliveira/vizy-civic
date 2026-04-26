@@ -155,7 +155,6 @@ def get_bill(bill_id: int, db: Session = Depends(get_db)):
             data["missing_detail"]
             or data["missing_tramitacoes"]
             or (data["type"] in ENRICH_TYPES and data["ementa"] and data["missing_ai"])
-            or data["missing_event_summaries"]
         )
     )
 
