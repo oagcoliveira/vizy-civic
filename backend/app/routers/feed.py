@@ -103,7 +103,11 @@ def get_feed(
                    v.id        AS votacao_id,
                    v.voted_at  AS occurred_at,
                    COALESCE(b.short_title, b.ementa, v.description) AS title,
-                   v.result    AS detail
+                   CASE v.result
+                     WHEN '1' THEN 'Aprovada'
+                     WHEN '0' THEN 'Rejeitada'
+                     ELSE v.result
+                   END AS detail
             FROM core.votacao_bills vb
             JOIN core.bills b   ON b.id  = vb.bill_id
             JOIN core.votacoes v ON v.id = vb.votacao_id
