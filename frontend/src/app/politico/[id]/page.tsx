@@ -221,7 +221,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
     <main className="max-w-5xl mx-auto px-4 py-8">
 
       {/* Header */}
-      <div className="flex gap-6 items-start mb-8">
+      <div className="flex gap-4 items-start mb-8">
         <div className="w-24 h-24 rounded-full overflow-hidden bg-muted ring-2 ring-border flex-shrink-0">
           {politician.photo_url ? (
             <img src={politician.photo_url} alt={politician.short_name} className="w-full h-full object-cover" />
@@ -231,7 +231,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <h1 className="text-2xl font-bold">{politician.short_name}</h1>
             <Badge variant="secondary">{politician.party}</Badge>
@@ -270,12 +270,12 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
 
       {/* Tabs */}
       <div className="border-b mb-6">
-        <div className="flex gap-0">
+        <div className="flex gap-0 overflow-x-auto scrollbar-none -mx-4 px-4">
           {TABS.map((tab, i) => (
             <button
               key={tab}
               onClick={() => setActiveTab(i)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === i
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
