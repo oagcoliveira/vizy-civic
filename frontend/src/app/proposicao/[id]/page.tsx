@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+const ADMIN_EMAIL = "oagcoliveira@gmail.com";
+
 type Bill = {
   id: number;
   source: string;
@@ -29,6 +31,8 @@ type Bill = {
   author_photo: string | null;
   author_state: string | null;
   author_party: string | null;
+  // Completeness signals from the API
+  needs_enrichment: boolean;
 };
 
 type LegislativeEvent = {
@@ -63,15 +67,19 @@ function formatDate(ts: string | null) {
   return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+type EnrichStatus = "idle" | "loading" | "success" | "error";
+
 export default function BillPage({ params }: { params: { id: string } }) {
   const { t } = useLanguage();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [bill, setBill] = useState<Bill | null>(null);
   const [votacoes, setVotacoes] = useState<VotacaoLink[]>([]);
   const [events, setEvents] = useState<LegislativeEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState<boolean | null>(null);
   const [trackLoading, setTrackLoading] = useState(false);
+  const [enrichStatus, setEnrichStatus] = useState<EnrichStatus>("idle");
+  const [enrichMessage, setEnrichMessage] = useState<string | null>(null);
 
   function resultBadge(result: string | null) {
     if (result === "1" || result?.toLowerCase().includes("aprovad"))
@@ -119,6 +127,43 @@ export default function BillPage({ params }: { params: { id: string } }) {
       }
     } finally {
       setTrackLoading(false);
+    }
+  }
+
+  async function handleEnrich() {
+    if (!token) return;
+    setEnrichStatus("loading");
+    setEnrichMessage(null);
+    try {
+      const r = await fetch(`${API}/bills/${params.id}/enrich`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (r.status === 202) {
+        setEnrichStatus("success");
+        setEnrichMessage("Enriquecimento iniciado. Os dados serão atualizados em instantes.");
+        // Reload bill data after a short delay so the user sees the updated fields
+        setTimeout(() => {
+          fetch(`${API}/bills/${params.id}`)
+            .then((res) => res.json())
+            .then((updated) => setBill(updated))
+            .catch(() => {});
+          fetch(`${API}/bills/${params.id}/events`)
+            .then((res) => res.json())
+            .then((data) => setEvents(Array.isArray(data) ? data : []))
+            .catch(() => {});
+        }, 8000);
+      } else if (r.status === 409) {
+        setEnrichStatus("idle");
+        setEnrichMessage("Esta proposição já está completamente enriquecida.");
+      } else {
+        setEnrichStatus("error");
+        setEnrichMessage(data.detail ?? "Erro ao iniciar enriquecimento.");
+      }
+    } catch {
+      setEnrichStatus("error");
+      setEnrichMessage("Erro de rede ao tentar enriquecer.");
     }
   }
 
@@ -170,17 +215,30 @@ export default function BillPage({ params }: { params: { id: string } }) {
           {bill.policy_area && (
             <Badge variant="secondary" className="text-xs">{bill.policy_area}</Badge>
           )}
-          <button
-            onClick={toggleTrack}
-            disabled={trackLoading}
-            className={`ml-auto text-sm font-medium px-3 py-1 rounded-md border transition-colors disabled:opacity-60 ${
-              tracking
-                ? "bg-primary text-primary-foreground border-primary"
-                : "text-muted-foreground hover:text-foreground border-border"
-            }`}
-          >
-            {tracking ? t("bill.tracking") : t("bill.track")}
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {/* Enrich button — only shown to the admin user when the bill has missing data */}
+            {user?.email === ADMIN_EMAIL && bill.needs_enrichment && (
+              <button
+                onClick={handleEnrich}
+                disabled={enrichStatus === "loading"}
+                title="Enriquecer esta proposição com dados da API da Câmara e IA"
+                className="text-sm font-medium px-3 py-1 rounded-md border transition-colors disabled:opacity-60 text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100"
+              >
+                {enrichStatus === "loading" ? "Enriquecendo..." : "✦ Enriquecer"}
+              </button>
+            )}
+            <button
+              onClick={toggleTrack}
+              disabled={trackLoading}
+              className={`text-sm font-medium px-3 py-1 rounded-md border transition-colors disabled:opacity-60 ${
+                tracking
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "text-muted-foreground hover:text-foreground border-border"
+              }`}
+            >
+              {tracking ? t("bill.tracking") : t("bill.track")}
+            </button>
+          </div>
         </div>
         <h1 className="text-2xl font-bold leading-snug mb-2">{headline}</h1>
         {bill.policy_tags && bill.policy_tags.length > 0 && (
@@ -191,6 +249,19 @@ export default function BillPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
+
+      {/* Enrich status message */}
+      {enrichMessage && (
+        <div className={`mb-4 px-4 py-2 rounded-md text-sm border ${
+          enrichStatus === "success"
+            ? "bg-green-50 border-green-200 text-green-800"
+            : enrichStatus === "error"
+            ? "bg-red-50 border-red-200 text-red-800"
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          {enrichMessage}
+        </div>
+      )}
 
       {/* Author */}
       {(bill.author_name || bill.author_label) && (

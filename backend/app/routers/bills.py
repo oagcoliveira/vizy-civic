@@ -1,10 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import os
+import subprocess
+import threading
+from pathlib import Path
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.auth import BillTrack, User
 from app.routers.auth import get_current_user
+
+# Admin e-mail — only this user may trigger per-bill enrichment
+ADMIN_EMAIL = "oagcoliveira@gmail.com"
+
+# Paths resolved relative to this file so they work both locally and in Railway
+_BACKEND_DIR = Path(__file__).parent.parent.parent          # backend/
+_ETL_DIR     = _BACKEND_DIR.parent / "etl"                  # etl/
+
+# One lock per bill to prevent concurrent enrichment of the same bill
+_enrich_locks: dict[int, threading.Lock] = {}
+_enrich_locks_mutex = threading.Lock()
 
 router = APIRouter()
 
@@ -97,7 +113,19 @@ def get_bill(bill_id: int, db: Session = Depends(get_db)):
                b.author_label, b.full_text_url, b.updated_at,
                p.id AS author_politician_id, p.short_name AS author_name,
                p.photo_url AS author_photo, p.state AS author_state,
-               pa.acronym AS author_party
+               pa.acronym AS author_party,
+               -- Completeness signals used by the frontend Enrich button
+               (b.status IS NULL) AS missing_detail,
+               (b.short_title IS NULL OR b.policy_area IS NULL) AS missing_ai,
+               NOT EXISTS (
+                   SELECT 1 FROM core.legislative_events le WHERE le.bill_id = b.id
+               ) AS missing_tramitacoes,
+               EXISTS (
+                   SELECT 1 FROM core.legislative_events le
+                   WHERE le.bill_id = b.id
+                     AND le.summary IS NULL
+                     AND (le.stage IS NOT NULL OR le.description IS NOT NULL)
+               ) AS missing_event_summaries
         FROM core.bills b
         LEFT JOIN core.politicians p ON p.id = b.author_politician_id
         LEFT JOIN core.parties pa ON pa.id = p.party_id
@@ -107,7 +135,21 @@ def get_bill(bill_id: int, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Bill not found")
 
-    return dict(row._mapping)
+    data = dict(row._mapping)
+
+    # Derive a single boolean the frontend can use to decide whether to show the Enrich button
+    ENRICH_TYPES = ("PL", "PLP", "PEC", "MPV", "PDL", "PRC", "MSC", "TVR", "PLN", "PDC")
+    data["needs_enrichment"] = (
+        data["source"] == "camara"
+        and (
+            data["missing_detail"]
+            or data["missing_tramitacoes"]
+            or (data["type"] in ENRICH_TYPES and data["ementa"] and data["missing_ai"])
+            or data["missing_event_summaries"]
+        )
+    )
+
+    return data
 
 
 @router.get("/{bill_id}/votacoes")
@@ -184,3 +226,130 @@ def untrack_bill(
         db.delete(existing)
         db.commit()
     return {"tracking": False}
+
+
+# ---------------------------------------------------------------------------
+# Per-bill enrichment
+# ---------------------------------------------------------------------------
+
+def _get_bill_lock(bill_id: int) -> threading.Lock:
+    """Return (creating if needed) a per-bill threading lock."""
+    with _enrich_locks_mutex:
+        if bill_id not in _enrich_locks:
+            _enrich_locks[bill_id] = threading.Lock()
+        return _enrich_locks[bill_id]
+
+
+def _run_bill_enrichment(bill_id: int) -> None:
+    """Background task: run the full enrichment pipeline for one bill."""
+    lock = _get_bill_lock(bill_id)
+    if not lock.acquire(blocking=False):
+        print(f"[enrich_bill] bill_id={bill_id}: already running — skipped", flush=True)
+        return
+    try:
+        from dotenv import dotenv_values
+        env = {
+            **os.environ,
+            **dotenv_values(_ETL_DIR / ".env"),
+            **dotenv_values(_BACKEND_DIR / ".env"),
+        }
+        if not env.get("DATABASE_URL"):
+            print(f"[enrich_bill] bill_id={bill_id}: DATABASE_URL not set — aborting", flush=True)
+            return
+        if not _ETL_DIR.exists():
+            print(f"[enrich_bill] bill_id={bill_id}: ETL_DIR not found at {_ETL_DIR} — aborting", flush=True)
+            return
+
+        print(f"[enrich_bill] bill_id={bill_id}: starting subprocess", flush=True)
+        subprocess.run(
+            ["python", "-m", "camara.bill_enrich_single", "--bill-id", str(bill_id)],
+            cwd=str(_ETL_DIR),
+            env=env,
+            timeout=300,   # 5 min is more than enough for a single bill
+            check=False,
+        )
+        print(f"[enrich_bill] bill_id={bill_id}: subprocess finished", flush=True)
+    except subprocess.TimeoutExpired:
+        print(f"[enrich_bill] bill_id={bill_id}: timed out after 300s", flush=True)
+    except Exception as exc:
+        print(f"[enrich_bill] bill_id={bill_id}: error — {exc}", flush=True)
+    finally:
+        lock.release()
+
+
+@router.post("/{bill_id}/enrich", status_code=status.HTTP_202_ACCEPTED)
+def enrich_bill(
+    bill_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger the full enrichment pipeline for a single Câmara bill.
+
+    Runs sequentially in the background:
+      1. Detail ingest  — status, author, full_text_url  (Câmara API)
+      2. Tramitações    — legislative events              (Câmara API)
+      3. AI bill        — short_title, summary, policy_area (Claude Haiku)
+      4. AI events      — plain-language event summaries  (Claude Haiku)
+
+    Access is restricted to the admin user.
+    Returns 409 if the bill is already fully enriched.
+    """
+    if current_user.email != ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Verify the bill exists and is a Câmara bill
+    row = db.execute(text("""
+        SELECT id, source, status, short_title, policy_area, ementa, type,
+               EXISTS (
+                   SELECT 1 FROM core.legislative_events WHERE bill_id = core.bills.id
+               ) AS has_events
+        FROM core.bills
+        WHERE id = :id
+    """), {"id": bill_id}).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    if row.source != "camara":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Only 'camara' bills are supported for per-bill enrichment (this bill has source='{row.source}').",
+        )
+
+    # Determine whether there is actually anything to do
+    ENRICH_TYPES = ("PL", "PLP", "PEC", "MPV", "PDL", "PRC", "MSC", "TVR", "PLN", "PDC")
+    needs_detail   = row.status is None
+    needs_tramit   = not row.has_events
+    needs_ai_bill  = (
+        row.type in ENRICH_TYPES
+        and row.ementa is not None
+        and (row.short_title is None or row.policy_area is None)
+    )
+    needs_ai_events = db.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM core.legislative_events
+            WHERE bill_id = :id AND summary IS NULL
+              AND (stage IS NOT NULL OR description IS NOT NULL)
+        )
+    """), {"id": bill_id}).scalar()
+
+    if not any([needs_detail, needs_tramit, needs_ai_bill, needs_ai_events]):
+        raise HTTPException(
+            status_code=409,
+            detail="Bill is already fully enriched — nothing to do.",
+        )
+
+    background_tasks.add_task(_run_bill_enrichment, bill_id)
+
+    return {
+        "status": "enrichment_started",
+        "bill_id": bill_id,
+        "pending": {
+            "detail": needs_detail,
+            "tramitacoes": needs_tramit,
+            "ai_bill": needs_ai_bill,
+            "ai_events": needs_ai_events,
+        },
+    }
