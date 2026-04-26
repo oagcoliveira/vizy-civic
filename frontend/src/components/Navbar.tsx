@@ -1,30 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+
+const NAV_LINKS = [
+  { href: "/deputados", key: "nav.deputies" },
+  { href: "/proposicoes", key: "nav.bills" },
+  { href: "/votacoes", key: "nav.votes" },
+  { href: "/doacoes", key: "nav.donations" },
+  { href: "/partidos", key: "nav.parties" },
+  { href: "/busca", key: "nav.search" },
+  { href: "/digest", key: "nav.digest" },
+] as const;
 
 export function Navbar() {
   const { t, lang, setLang } = useLanguage();
   const { user, logout } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <header className="border-b bg-white sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        {/* Left: logo + desktop nav */}
         <div className="flex items-center gap-8">
           <Link href="/" className="text-xl font-bold text-primary">
             Vizy
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <Link href="/deputados" className="hover:text-foreground transition-colors">{t("nav.deputies")}</Link>
-            <Link href="/partidos" className="hover:text-foreground transition-colors">{t("nav.parties")}</Link>
-            <Link href="/votacoes" className="hover:text-foreground transition-colors">{t("nav.votes")}</Link>
-            <Link href="/proposicoes" className="hover:text-foreground transition-colors">{t("nav.bills")}</Link>
-            <Link href="/doacoes" className="hover:text-foreground transition-colors">{t("nav.donations")}</Link>
-            <Link href="/busca" className="hover:text-foreground transition-colors">{t("nav.search")}</Link>
-            <Link href="/digest" className="hover:text-foreground transition-colors font-semibold text-primary">{t("nav.digest")}</Link>
+            {NAV_LINKS.map(({ href, key }) => (
+              <Link
+                key={href}
+                href={href}
+                className="hover:text-foreground transition-colors"
+              >
+                {t(key)}
+              </Link>
+            ))}
           </nav>
         </div>
+
+        {/* Right: language toggle + auth + mobile hamburger */}
         <div className="flex items-center gap-3">
           {/* Language toggle */}
           <div className="flex items-center text-xs font-medium border rounded-md overflow-hidden">
@@ -41,36 +58,110 @@ export function Navbar() {
               EN
             </button>
           </div>
-          {user ? (
-            <>
-              <Link href="/feed" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                {t("nav.feed")}
-              </Link>
-              {user.email === "oagcoliveira@gmail.com" && (
-                <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5">
-                  Admin
+
+          {/* Auth links — hidden on mobile to keep header clean */}
+          <div className="hidden md:flex items-center gap-3">
+            {user ? (
+              <>
+                <Link href="/feed" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  {t("nav.feed")}
                 </Link>
-              )}
-              <span className="text-sm text-muted-foreground">{user.name.split(" ")[0]}</span>
-              <button
-                onClick={logout}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {t("nav.logout")}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                {t("nav.login")}
-              </Link>
-              <Link href="/cadastro" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-md hover:bg-primary/90 transition-colors">
-                {t("nav.signup")}
-              </Link>
-            </>
-          )}
+                {user.email === "oagcoliveira@gmail.com" && (
+                  <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5">
+                    Admin
+                  </Link>
+                )}
+                <span className="text-sm text-muted-foreground">{user.name.split(" ")[0]}</span>
+                <button
+                  onClick={logout}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t("nav.logout")}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  {t("nav.login")}
+                </Link>
+                <Link href="/cadastro" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-md hover:bg-primary/90 transition-colors">
+                  {t("nav.signup")}
+                </Link>
+              </>
+            )}
+          </div>
+
+          {/* Hamburger — visible only on mobile */}
+          <button
+            className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            aria-label="Toggle menu"
+          >
+            <span
+              className={`block w-5 h-0.5 bg-foreground transition-transform duration-200 ${mobileOpen ? "translate-y-2 rotate-45" : ""}`}
+            />
+            <span
+              className={`block w-5 h-0.5 bg-foreground transition-opacity duration-200 ${mobileOpen ? "opacity-0" : ""}`}
+            />
+            <span
+              className={`block w-5 h-0.5 bg-foreground transition-transform duration-200 ${mobileOpen ? "-translate-y-2 -rotate-45" : ""}`}
+            />
+          </button>
         </div>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="md:hidden border-t bg-white px-4 py-4 flex flex-col gap-4">
+          <nav className="flex flex-col gap-3 text-sm font-medium text-muted-foreground">
+            {NAV_LINKS.map(({ href, key }) => (
+              <Link
+                key={href}
+                href={href}
+                className="hover:text-foreground transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                {t(key)}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="border-t pt-3 flex flex-col gap-3 text-sm font-medium text-muted-foreground">
+            {user ? (
+              <>
+                <Link href="/feed" className="hover:text-foreground transition-colors" onClick={() => setMobileOpen(false)}>
+                  {t("nav.feed")}
+                </Link>
+                {user.email === "oagcoliveira@gmail.com" && (
+                  <Link href="/admin" className="text-xs hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5 w-fit" onClick={() => setMobileOpen(false)}>
+                    Admin
+                  </Link>
+                )}
+                <span className="text-muted-foreground">{user.name.split(" ")[0]}</span>
+                <button
+                  onClick={() => { logout(); setMobileOpen(false); }}
+                  className="text-left hover:text-foreground transition-colors"
+                >
+                  {t("nav.logout")}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="hover:text-foreground transition-colors" onClick={() => setMobileOpen(false)}>
+                  {t("nav.login")}
+                </Link>
+                <Link
+                  href="/cadastro"
+                  className="bg-primary text-primary-foreground px-4 py-1.5 rounded-md hover:bg-primary/90 transition-colors w-fit"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {t("nav.signup")}
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
