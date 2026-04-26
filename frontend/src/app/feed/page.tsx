@@ -220,7 +220,7 @@ export default function FeedPage() {
                       className="group block"
                     >
                       <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                        {b.short_title ?? `${b.type ?? ""}${b.number ? ` ${b.number}` : ""}${b.year ? `/${b.year}` : ""}`.trim() || `#${b.bill_id}`}
+                        {(b.short_title ?? `${b.type ?? ""}${b.number ? ` ${b.number}` : ""}${b.year ? `/${b.year}` : ""}`.trim()) || `#${b.bill_id}`}
                       </p>
                       {b.status && (
                         <p className="text-xs text-muted-foreground truncate">{b.status}</p>
@@ -335,7 +335,7 @@ export default function FeedPage() {
                         {isBillVote ? (
                           <span className="text-sm font-medium">
                             {trackedBill
-                              ? `${trackedBill.type ?? ""}${trackedBill.number ? ` ${trackedBill.number}` : ""}${trackedBill.year ? `/${trackedBill.year}` : ""}`.trim() || `#${item.bill_id}`
+                              ? (`${trackedBill.type ?? ""}${trackedBill.number ? ` ${trackedBill.number}` : ""}${trackedBill.year ? `/${trackedBill.year}` : ""}`.trim() || `#${item.bill_id}`)
                               : `#${item.bill_id}`}
                           </span>
                         ) : (
