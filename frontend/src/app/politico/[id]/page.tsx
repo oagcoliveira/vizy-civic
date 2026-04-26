@@ -421,22 +421,20 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
                 <Link key={b.id} href={`/proposicao/${b.id}`} className="block hover:opacity-80 transition-opacity">
                   <Card>
                     <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">
-                            {b.short_title ?? b.ementa ?? t("bills.no_title")}
+                      <div>
+                        <p className="text-sm font-medium">
+                          {b.short_title ?? b.ementa ?? t("bills.no_title")}
+                        </p>
+                        {b.type && b.number && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {b.type} {b.number}/{b.year}
                           </p>
-                          {b.type && b.number && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {b.type} {b.number}/{b.year}
-                            </p>
-                          )}
-                          {b.policy_area && (
-                            <Badge variant="secondary" className="mt-1 text-xs">{b.policy_area}</Badge>
-                          )}
-                        </div>
+                        )}
                         {b.status && (
-                          <Badge variant="outline" className="flex-shrink-0 text-xs">{b.status}</Badge>
+                          <Badge variant="outline" className="mt-2 text-xs">{b.status}</Badge>
+                        )}
+                        {b.policy_area && (
+                          <Badge variant="secondary" className="mt-1 text-xs">{b.policy_area}</Badge>
                         )}
                       </div>
                     </CardContent>
