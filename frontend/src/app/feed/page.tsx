@@ -68,7 +68,7 @@ export default function FeedPage() {
         });
         if (eventType) params.set("event_type", eventType);
 
-        const r = await fetch(`${API}/feed?${params}`, {
+        const r = await fetch(`${API}/feed/?${params}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await r.json();
