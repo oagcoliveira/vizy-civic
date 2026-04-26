@@ -33,6 +33,7 @@ def get_feed(
     # Build unified feed via raw SQL (union of event types).
     # Wrapped in a subquery so ORDER BY / LIMIT / OFFSET apply to the full union.
     # NULLS LAST ensures rows with no date don't float to the top.
+    # COALESCE on title mirrors the activity endpoint's fallback chain.
     # event_type filter is applied when provided.
     type_filter = ""
     if event_type in ("vote", "speech"):
@@ -42,7 +43,9 @@ def get_feed(
         SELECT event_type, id, politician_id, occurred_at, title, detail
         FROM (
             SELECT 'vote' AS event_type, iv.id, iv.politician_id,
-                   v.voted_at AS occurred_at, b.short_title AS title, iv.vote AS detail
+                   v.voted_at AS occurred_at,
+                   COALESCE(b.short_title, b.ementa, v.description) AS title,
+                   iv.vote AS detail
             FROM core.individual_votes iv
             JOIN core.votacoes v ON v.id = iv.votacao_id
             LEFT JOIN core.votacao_bills vb ON vb.votacao_id = v.id AND vb.is_primary = TRUE
