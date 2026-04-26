@@ -346,6 +346,12 @@ const pt = {
   "feed.event_speech":       "Discursou",
   "feed.lawmaker_fallback":  "Parlamentar #{id}",
   "feed.browse_deputies":    "Explorar deputados",
+  "feed.filter_bill_votes":   "Votações de proposições",
+  "feed.event_bill_vote":     "Votação realizada",
+  "feed.tracking_title":      "Acompanhando",
+  "feed.no_tracks":           "Você não está acompanhando nenhuma proposição.",
+  "feed.browse_bills":        "Explorar proposições",
+  "feed.empty_combined":      "Nenhuma atividade recente dos parlamentares ou proposições que você acompanha.",
 
   // ── Donor modal ─────────────────────────────────────────────────────────────
   "donor.type_company":    "Pessoa Jurídica",
@@ -819,6 +825,12 @@ const en: Record<keyof typeof pt, string> = {
   "feed.event_speech":       "Spoke",
   "feed.lawmaker_fallback":  "Lawmaker #{id}",
   "feed.browse_deputies":    "Browse deputies",
+  "feed.filter_bill_votes":   "Bill votes",
+  "feed.event_bill_vote":     "Vote held",
+  "feed.tracking_title":      "Tracking",
+  "feed.no_tracks":           "You're not tracking any bills.",
+  "feed.browse_bills":        "Browse bills",
+  "feed.empty_combined":      "No recent activity from the lawmakers or bills you follow.",
 
   // ── Donor modal ─────────────────────────────────────────────────────────────
   "donor.type_company":    "Legal Entity",
