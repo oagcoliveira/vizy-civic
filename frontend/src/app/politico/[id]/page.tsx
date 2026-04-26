@@ -221,51 +221,59 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
     <main className="max-w-5xl mx-auto px-4 py-8">
 
       {/* Header */}
-      <div className="flex gap-4 items-start mb-8">
-        <div className="w-24 h-24 rounded-full overflow-hidden bg-muted ring-2 ring-border flex-shrink-0">
-          {politician.photo_url ? (
-            <img src={politician.photo_url} alt={politician.short_name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-muted-foreground">
-              {politician.short_name?.[0]}
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0 w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold">{politician.short_name}</h1>
-            <Badge variant="secondary">{politician.party}</Badge>
-            <Badge variant="outline">{politician.state}</Badge>
-            <Badge variant="outline">{officeLabel}</Badge>
+      <div className="mb-8 space-y-4">
+        {/* Row 1: photo · name/badges · follow button */}
+        <div className="flex gap-4 items-start">
+          <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-muted ring-2 ring-border flex-shrink-0">
+            {politician.photo_url ? (
+              <img src={politician.photo_url} alt={politician.short_name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-muted-foreground">
+                {politician.short_name?.[0]}
+              </div>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground mb-3">{politician.name}</p>
-          {politician.ai_bio && (
-            <p className="text-sm text-foreground/80 mb-3">{politician.ai_bio}</p>
-          )}
-          {/* Stats */}
-          {stats?.votes !== undefined && (
-            <div className="flex flex-wrap gap-3 text-sm">
-              <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.votes.toLocaleString("pt-BR")}</strong> {t("politician.stat_votes")}
-              </span>
-              <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.speeches.toLocaleString("pt-BR")}</strong> {t("politician.stat_speeches")}
-              </span>
-              <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
-                <strong className="text-foreground">{stats.bills.toLocaleString("pt-BR")}</strong> {t("politician.stat_bills")}
-              </span>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold leading-tight">{politician.short_name}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <Badge variant="secondary">{politician.party}</Badge>
+              <Badge variant="outline">{politician.state}</Badge>
+              <Badge variant="outline">{officeLabel}</Badge>
             </div>
-          )}
+            <p className="text-sm text-muted-foreground mt-1">{politician.name}</p>
+          </div>
+          <Button
+            variant={following ? "default" : "outline"}
+            size="sm"
+            className="flex-shrink-0"
+            onClick={toggleFollow}
+            disabled={followLoading}
+          >
+            {following ? t("politician.following") : t("politician.follow")}
+          </Button>
         </div>
-        <Button
-          variant={following ? "default" : "outline"}
-          size="sm"
-          className="flex-shrink-0"
-          onClick={toggleFollow}
-          disabled={followLoading}
-        >
-          {following ? t("politician.following") : t("politician.follow")}
-        </Button>
+
+        {/* Row 2: bio + stats — full width on all screen sizes */}
+        {(politician.ai_bio || stats?.votes !== undefined) && (
+          <div>
+            {politician.ai_bio && (
+              <p className="text-sm text-foreground/80 mb-3">{politician.ai_bio}</p>
+            )}
+            {stats?.votes !== undefined && (
+              <div className="flex flex-wrap gap-3 text-sm">
+                <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
+                  <strong className="text-foreground">{stats.votes.toLocaleString("pt-BR")}</strong> {t("politician.stat_votes")}
+                </span>
+                <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
+                  <strong className="text-foreground">{stats.speeches.toLocaleString("pt-BR")}</strong> {t("politician.stat_speeches")}
+                </span>
+                <span className="bg-muted px-3 py-1 rounded-full text-muted-foreground">
+                  <strong className="text-foreground">{stats.bills.toLocaleString("pt-BR")}</strong> {t("politician.stat_bills")}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
