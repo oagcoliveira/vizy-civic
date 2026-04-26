@@ -37,6 +37,32 @@ from app.config import settings
 engine = create_engine(settings.database_url)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+JOB_NAME = "enrich_speeches"
+
+
+def log_run(status: str, fetched: int = 0, updated: int = 0, error: str | None = None) -> None:
+    """Record this enrichment run in jobs.etl_runs."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO jobs.etl_runs
+                        (job_name, started_at, finished_at, status,
+                         records_fetched, records_updated, error_message)
+                    VALUES (:job, now(), now(), :status,
+                            :fetched, :updated, :error)
+                """),
+                {
+                    "job": JOB_NAME,
+                    "status": status,
+                    "fetched": fetched,
+                    "updated": updated,
+                    "error": error,
+                },
+            )
+    except Exception as log_exc:
+        print(f"[{JOB_NAME}] could not write to etl_runs — {log_exc}", file=sys.stderr)
+
 
 def fetch_batch(conn, limit: int) -> list[dict]:
     rows = conn.execute(
@@ -126,6 +152,7 @@ def run(limit: int):
 
     if not batch:
         print("No speeches without summary — nothing to do.")
+        log_run("success", fetched=0, updated=0)
         return
 
     has_transcript = sum(1 for r in batch if r.get("transcricao"))
@@ -133,43 +160,50 @@ def run(limit: int):
           f"{len(batch) - has_transcript} phase-only)...")
     ok = failed = 0
 
-    for item in batch:
-        label = f"id={item['id']} ({item['politician_name'] or 'unknown'})"
-        try:
-            enrichment = generate_speech_enrichment(
-                transcricao=item.get("transcricao"),
-                phase=item.get("phase"),
-                politician_name=item.get("politician_name"),
-            )
-
-            with engine.begin() as conn:
-                conn.execute(
-                    text("""
-                        UPDATE core.speeches
-                        SET summary = :summary,
-                            keywords = :keywords
-                        WHERE id = :id
-                    """),
-                    {
-                        "id": item["id"],
-                        "summary": enrichment.get("summary"),
-                        "keywords": enrichment.get("keywords"),
-                    },
+    try:
+        for item in batch:
+            label = f"id={item['id']} ({item['politician_name'] or 'unknown'})"
+            try:
+                enrichment = generate_speech_enrichment(
+                    transcricao=item.get("transcricao"),
+                    phase=item.get("phase"),
+                    politician_name=item.get("politician_name"),
                 )
 
-            src = "transcript" if item.get("transcricao") else "phase"
-            print(f"  [{ok + failed + 1}/{len(batch)}] {label} [{src}] — ok")
-            ok += 1
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("""
+                            UPDATE core.speeches
+                            SET summary = :summary,
+                                keywords = :keywords
+                            WHERE id = :id
+                        """),
+                        {
+                            "id": item["id"],
+                            "summary": enrichment.get("summary"),
+                            "keywords": enrichment.get("keywords"),
+                        },
+                    )
 
-        except Exception as exc:
-            print(f"  [{ok + failed + 1}/{len(batch)}] {label} — FAILED: {exc}", file=sys.stderr)
-            failed += 1
+                src = "transcript" if item.get("transcricao") else "phase"
+                print(f"  [{ok + failed + 1}/{len(batch)}] {label} [{src}] — ok")
+                ok += 1
 
-        finally:
-            # Respect Anthropic rate limits: small delay between every call
-            time.sleep(0.5)
+            except Exception as exc:
+                print(f"  [{ok + failed + 1}/{len(batch)}] {label} — FAILED: {exc}", file=sys.stderr)
+                failed += 1
 
-    print(f"\nDone — {ok} enriched, {failed} failed.")
+            finally:
+                # Respect Anthropic rate limits: small delay between every call
+                time.sleep(0.5)
+
+        print(f"\nDone — {ok} enriched, {failed} failed.")
+        log_run("success", fetched=len(batch), updated=ok)
+
+    except Exception as exc:
+        print(f"[{JOB_NAME}] unexpected error — {exc}", file=sys.stderr)
+        log_run("failed", fetched=len(batch), updated=ok, error=str(exc))
+        raise
 
 
 if __name__ == "__main__":

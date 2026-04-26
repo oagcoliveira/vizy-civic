@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -26,6 +27,32 @@ from app.config import settings
 
 engine = create_engine(settings.database_url)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+JOB_NAME = "enrich_legislative_events"
+
+
+def log_run(status: str, fetched: int = 0, updated: int = 0, error: str | None = None) -> None:
+    """Record this enrichment run in jobs.etl_runs."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO jobs.etl_runs
+                        (job_name, started_at, finished_at, status,
+                         records_fetched, records_updated, error_message)
+                    VALUES (:job, now(), now(), :status,
+                            :fetched, :updated, :error)
+                """),
+                {
+                    "job": JOB_NAME,
+                    "status": status,
+                    "fetched": fetched,
+                    "updated": updated,
+                    "error": error,
+                },
+            )
+    except Exception as log_exc:
+        print(f"[{JOB_NAME}] could not write to etl_runs — {log_exc}", file=sys.stderr)
 
 
 def fetch_batch(conn, limit: int) -> list[dict]:
@@ -75,6 +102,8 @@ def generate_plain_label(stage: str | None, description: str | None, venue: str 
         messages=[{"role": "user", "content": prompt}],
     )
     raw = message.content[0].text.strip()
+    if not raw:
+        raise ValueError("Anthropic returned an empty response — possible rate limit or content filter")
     if "```" in raw:
         raw = raw.split("```")[1].lstrip("json").strip()
     result = json.loads(raw)
@@ -87,37 +116,49 @@ def run(limit: int):
 
     if not batch:
         print("No legislative events without summary — nothing to do.")
+        log_run("success", fetched=0, updated=0)
         return
 
     print(f"Enriching {len(batch)} legislative events...")
     ok = failed = 0
 
-    for item in batch:
-        label = f"id={item['id']}"
-        try:
-            plain = generate_plain_label(
-                stage=item["stage"],
-                description=item["description"],
-                venue=item["venue"],
-            )
+    try:
+        for item in batch:
+            label = f"id={item['id']}"
+            try:
+                plain = generate_plain_label(
+                    stage=item["stage"],
+                    description=item["description"],
+                    venue=item["venue"],
+                )
 
-            if plain:
-                with engine.begin() as conn:
-                    conn.execute(
-                        text("UPDATE core.legislative_events SET summary = :s WHERE id = :id"),
-                        {"s": plain, "id": item["id"]},
-                    )
-                print(f"  [{ok + failed + 1}/{len(batch)}] {label} — ok: {plain}")
-            else:
-                print(f"  [{ok + failed + 1}/{len(batch)}] {label} — skipped (no input)")
+                if plain:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("UPDATE core.legislative_events SET summary = :s WHERE id = :id"),
+                            {"s": plain, "id": item["id"]},
+                        )
+                    print(f"  [{ok + failed + 1}/{len(batch)}] {label} — ok: {plain}")
+                else:
+                    print(f"  [{ok + failed + 1}/{len(batch)}] {label} — skipped (no input)")
 
-            ok += 1
+                ok += 1
 
-        except Exception as exc:
-            print(f"  [{ok + failed + 1}/{len(batch)}] {label} — FAILED: {exc}", file=sys.stderr)
-            failed += 1
+            except Exception as exc:
+                print(f"  [{ok + failed + 1}/{len(batch)}] {label} — FAILED: {exc}", file=sys.stderr)
+                failed += 1
 
-    print(f"\nDone — {ok} enriched, {failed} failed.")
+            finally:
+                # Respect Anthropic rate limits: small delay between every call
+                time.sleep(0.5)
+
+        print(f"\nDone — {ok} enriched, {failed} failed.")
+        log_run("success", fetched=len(batch), updated=ok)
+
+    except Exception as exc:
+        print(f"[{JOB_NAME}] unexpected error — {exc}", file=sys.stderr)
+        log_run("failed", fetched=len(batch), updated=ok, error=str(exc))
+        raise
 
 
 if __name__ == "__main__":

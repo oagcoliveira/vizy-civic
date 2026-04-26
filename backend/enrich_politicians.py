@@ -21,6 +21,32 @@ from app.services.ai_enrichment import generate_politician_bio
 
 engine = create_engine(settings.database_url)
 
+JOB_NAME = "enrich_politicians"
+
+
+def log_run(status: str, fetched: int = 0, updated: int = 0, error: str | None = None) -> None:
+    """Record this enrichment run in jobs.etl_runs."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO jobs.etl_runs
+                        (job_name, started_at, finished_at, status,
+                         records_fetched, records_updated, error_message)
+                    VALUES (:job, now(), now(), :status,
+                            :fetched, :updated, :error)
+                """),
+                {
+                    "job": JOB_NAME,
+                    "status": status,
+                    "fetched": fetched,
+                    "updated": updated,
+                    "error": error,
+                },
+            )
+    except Exception as log_exc:
+        print(f"[{JOB_NAME}] could not write to etl_runs — {log_exc}", file=sys.stderr)
+
 
 def fetch_batch(conn, limit: int) -> list[dict]:
     rows = conn.execute(
@@ -57,38 +83,46 @@ def run(limit: int):
 
     if not batch:
         print("No politicians without ai_bio — nothing to do.")
+        log_run("success", fetched=0, updated=0)
         return
 
     print(f"Enriching {len(batch)} politicians...")
     ok = failed = 0
 
-    for p in batch:
-        try:
-            with engine.connect() as conn:
-                committees = fetch_committees(conn, p["id"])
+    try:
+        for p in batch:
+            try:
+                with engine.connect() as conn:
+                    committees = fetch_committees(conn, p["id"])
 
-            bio = generate_politician_bio(
-                name=p["name"],
-                party=p["party"] or "partido não informado",
-                state=p["state"] or "?",
-                office=p["current_office"] or "deputado",
-                committees=committees,
-            )
-
-            with engine.begin() as conn:
-                conn.execute(
-                    text("UPDATE core.politicians SET ai_bio = :bio, updated_at = now() WHERE id = :id"),
-                    {"bio": bio, "id": p["id"]},
+                bio = generate_politician_bio(
+                    name=p["name"],
+                    party=p["party"] or "partido não informado",
+                    state=p["state"] or "?",
+                    office=p["current_office"] or "deputado",
+                    committees=committees,
                 )
 
-            print(f"  [{ok + failed + 1}/{len(batch)}] {p['name']} — ok")
-            ok += 1
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE core.politicians SET ai_bio = :bio, updated_at = now() WHERE id = :id"),
+                        {"bio": bio, "id": p["id"]},
+                    )
 
-        except Exception as exc:
-            print(f"  [{ok + failed + 1}/{len(batch)}] {p['name']} — FAILED: {exc}", file=sys.stderr)
-            failed += 1
+                print(f"  [{ok + failed + 1}/{len(batch)}] {p['name']} — ok")
+                ok += 1
 
-    print(f"\nDone — {ok} enriched, {failed} failed.")
+            except Exception as exc:
+                print(f"  [{ok + failed + 1}/{len(batch)}] {p['name']} — FAILED: {exc}", file=sys.stderr)
+                failed += 1
+
+        print(f"\nDone — {ok} enriched, {failed} failed.")
+        log_run("success", fetched=len(batch), updated=ok)
+
+    except Exception as exc:
+        print(f"[{JOB_NAME}] unexpected error — {exc}", file=sys.stderr)
+        log_run("failed", fetched=len(batch), updated=ok, error=str(exc))
+        raise
 
 
 if __name__ == "__main__":

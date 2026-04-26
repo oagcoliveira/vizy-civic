@@ -10,7 +10,7 @@ Fixed daily schedule:
   03:00  camara_votes_daily
   03:05  camara_bills_ingest_daily      (discovery + detail backfill, capped at 300/run)
   03:20  camara_bills_tramitacoes_daily (capped at 500/run)
-  03:35  camara_speeches_daily
+  03:35  camara_speeches_daily          (timeout=1800s — 513 deputies × API rate limit)
   03:45  camara_commissions_sync
   04:00  camara_bills_enrich_daily      (AI — Claude Haiku, capped at 200/run)
   04:15  enrich_speeches                (AI — Claude Haiku, batch 300)
@@ -303,7 +303,7 @@ def _build_scheduler() -> BackgroundScheduler:
     )
     def _run_speeches_daily():
         """Run speeches_daily and emit a warning when 0 speeches are fetched on a weekday."""
-        _run_etl_module("camara_speeches_daily", ETL_JOBS["camara_speeches_daily"], ETL_DIR)
+        _run_etl_module("camara_speeches_daily", ETL_JOBS["camara_speeches_daily"], ETL_DIR, timeout=1800)
         # Check if today is a weekday (Mon=0 … Fri=4) in BRT and the run fetched nothing.
         # A zero-fetch on a weekday usually means the Câmara API was unavailable.
         now_brt = datetime.now(ZoneInfo("America/Sao_Paulo"))
