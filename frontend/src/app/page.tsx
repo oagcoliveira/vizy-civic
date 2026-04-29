@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -10,7 +11,9 @@ type Stats = { politicians: number; votes: number; speeches: number };
 
 export default function Home() {
   const { t } = useLanguage();
+  const { user, token, loading } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
+  const showGuestCtas = !loading && !user && !token;
 
   useEffect(() => {
     Promise.all([
@@ -36,9 +39,11 @@ export default function Home() {
           <Link href="/deputados" className="bg-white text-primary font-semibold px-6 py-3 rounded-lg hover:bg-primary-foreground/90 transition">
             {t("home.cta_deputies")}
           </Link>
-          <Link href="/cadastro" className="border border-white/60 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition">
-            {t("home.cta_signup")}
-          </Link>
+          {showGuestCtas && (
+            <Link href="/cadastro" className="border border-white/60 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition">
+              {t("home.cta_signup")}
+            </Link>
+          )}
         </div>
       </section>
 
@@ -77,13 +82,15 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-6 text-center border-t bg-muted/30">
-        <h2 className="text-2xl font-bold mb-3">{t("home.cta2_title")}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md mx-auto text-sm">{t("home.cta2_desc")}</p>
-        <Link href="/cadastro" className="inline-block bg-primary text-primary-foreground font-semibold px-8 py-3 rounded-lg hover:bg-primary/90 transition">
-          {t("home.cta2_button")}
-        </Link>
-      </section>
+      {showGuestCtas && (
+        <section className="py-16 px-6 text-center border-t bg-muted/30">
+          <h2 className="text-2xl font-bold mb-3">{t("home.cta2_title")}</h2>
+          <p className="text-muted-foreground mb-6 max-w-md mx-auto text-sm">{t("home.cta2_desc")}</p>
+          <Link href="/cadastro" className="inline-block bg-primary text-primary-foreground font-semibold px-8 py-3 rounded-lg hover:bg-primary/90 transition">
+            {t("home.cta2_button")}
+          </Link>
+        </section>
+      )}
     </main>
   );
 }
