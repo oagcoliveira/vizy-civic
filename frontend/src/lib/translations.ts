@@ -143,7 +143,7 @@ const pt = {
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Acompanhar",
   "bill.tracking":       "✓ Acompanhando",
-  "bill.back":           "← Base de Votações",
+  "bill.back":           "← Proposições",
   "bill.what_is":        "O que é?",
   "bill.no_summary":     "Resumo não disponível.",
   "bill.read_full":      "Ler texto integral na Câmara dos Deputados →",
@@ -624,7 +624,7 @@ const en: Record<keyof typeof pt, string> = {
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Track",
   "bill.tracking":       "✓ Tracking",
-  "bill.back":           "← Votes database",
+  "bill.back":           "← Bills",
   "bill.what_is":        "What is this?",
   "bill.no_summary":     "Summary not available.",
   "bill.read_full":      "Read full text at the Chamber of Deputies →",

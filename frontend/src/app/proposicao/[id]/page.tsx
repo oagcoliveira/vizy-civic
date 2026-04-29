@@ -182,7 +182,7 @@ export default function BillPage({ params }: { params: { id: string } }) {
     return (
       <main className="max-w-4xl mx-auto px-4 py-8">
         <p className="text-muted-foreground">{t("bill.not_found")}</p>
-        <Link href="/votacoes" className="text-primary text-sm mt-2 block">{t("bill.back_short")}</Link>
+        <Link href="/proposicoes" className="text-primary text-sm mt-2 block">{t("bill.back_short")}</Link>
       </main>
     );
   }
@@ -193,7 +193,7 @@ export default function BillPage({ params }: { params: { id: string } }) {
   return (
     <main className="max-w-4xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
-      <Link href="/votacoes" className="text-sm text-muted-foreground hover:text-primary mb-4 block">
+      <Link href="/proposicoes" className="text-sm text-muted-foreground hover:text-primary mb-4 block">
         {t("bill.back")}
       </Link>
 
