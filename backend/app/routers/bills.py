@@ -149,10 +149,14 @@ def get_bill(bill_id: int, db: Session = Depends(get_db)):
 
     # Derive a single boolean the frontend can use to decide whether to show the Enrich button
     ENRICH_TYPES = ("PL", "PLP", "PEC", "MPV", "PDL", "PRC", "MSC", "TVR", "PLN", "PDC")
+    # A bill is "complete enough" if it already has short_title + policy_area,
+    # even if status is still null (some Câmara bills never return a status).
+    # missing_detail only triggers enrichment when the AI fields are also absent.
+    _detail_needed = data["missing_detail"] and data["missing_ai"]
     data["needs_enrichment"] = (
         data["source"] == "camara"
         and (
-            data["missing_detail"]
+            _detail_needed
             or data["missing_tramitacoes"]
             or (data["type"] in ENRICH_TYPES and data["ementa"] and data["missing_ai"])
         )
