@@ -39,7 +39,7 @@ import os
 import subprocess
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -396,6 +396,78 @@ def _build_scheduler() -> BackgroundScheduler:
     return scheduler
 
 # ---------------------------------------------------------------------------
+# Startup catch-up hook
+# ---------------------------------------------------------------------------
+
+# Daily ingestion jobs to check at startup, in execution order.
+# Each entry: (job_name, runner_callable, stale_after_hours)
+_CATCHUP_JOBS: list[tuple[str, callable, int]] = [
+    ("camara_votes_daily",             lambda: _run_etl_module("camara_votes_daily", ETL_JOBS["camara_votes_daily"], ETL_DIR),                          24),
+    ("camara_bills_ingest_daily",      lambda: _run_bills_ingest("startup-catchup"),                                                                    24),
+    ("camara_bills_tramitacoes_daily", lambda: _run_bills_tramitacoes("startup-catchup"),                                                               24),
+    ("camara_speeches_daily",          lambda: _run_etl_module("camara_speeches_daily", ETL_JOBS["camara_speeches_daily"], ETL_DIR, timeout=1800),       24),
+    ("camara_commissions_sync",        lambda: _run_etl_module("camara_commissions_sync", ETL_JOBS["camara_commissions_sync"], ETL_DIR),                 24),
+    ("camara_politicians_weekly",      lambda: _run_etl_module("camara_politicians_weekly", WEEKLY_ETL_JOBS["camara_politicians_weekly"], ETL_DIR),      168),
+    ("senado_politicians_weekly",      lambda: _run_etl_module("senado_politicians_weekly", WEEKLY_ETL_JOBS["senado_politicians_weekly"], ETL_DIR),      168),
+]
+
+
+def _last_successful_run_dt(job_name: str) -> datetime | None:
+    """Return the UTC datetime of the most recent successful run, or None."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT finished_at FROM jobs.etl_runs
+                    WHERE job_name = :job AND status = 'success'
+                    ORDER BY finished_at DESC LIMIT 1
+                """),
+                {"job": job_name},
+            ).fetchone()
+        if row and row[0]:
+            dt = row[0]
+            # Ensure timezone-aware
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+    except Exception as exc:
+        print(f"[startup-catchup] could not query etl_runs for {job_name}: {exc}")
+    return None
+
+
+def _run_startup_catchup():
+    """Run any daily/weekly ETL job whose last successful run is older than its
+    stale threshold.  Executes in a background thread so it doesn't block startup."""
+    now = datetime.now(timezone.utc)
+    stale_jobs: list[tuple[str, callable]] = []
+
+    for job_name, runner, stale_hours in _CATCHUP_JOBS:
+        last_run = _last_successful_run_dt(job_name)
+        if last_run is None:
+            print(f"[startup-catchup] {job_name}: never run — queuing")
+            stale_jobs.append((job_name, runner))
+        elif (now - last_run) > timedelta(hours=stale_hours):
+            age_h = (now - last_run).total_seconds() / 3600
+            print(f"[startup-catchup] {job_name}: last run {last_run.strftime('%Y-%m-%d %H:%M')} UTC ({age_h:.1f}h ago) — queuing")
+            stale_jobs.append((job_name, runner))
+        else:
+            print(f"[startup-catchup] {job_name}: up-to-date (last run {last_run.strftime('%Y-%m-%d %H:%M')} UTC) — skipping")
+
+    if not stale_jobs:
+        print("[startup-catchup] all jobs are up-to-date")
+        return
+
+    print(f"[startup-catchup] running {len(stale_jobs)} stale job(s): {[j for j, _ in stale_jobs]}")
+    for job_name, runner in stale_jobs:
+        print(f"[startup-catchup] starting {job_name}")
+        try:
+            runner()
+        except Exception as exc:
+            print(f"[startup-catchup] {job_name}: error — {exc}")
+    print("[startup-catchup] catch-up complete")
+
+
+# ---------------------------------------------------------------------------
 # FastAPI lifespan
 # ---------------------------------------------------------------------------
 
@@ -404,6 +476,8 @@ async def lifespan(app: FastAPI):
     scheduler = _build_scheduler()
     scheduler.start()
     print("[scheduler] APScheduler started — ETL jobs scheduled (daily cron + every-2h conditional)")
+    # Run catch-up in a background thread so startup is non-blocking
+    threading.Thread(target=_run_startup_catchup, daemon=True, name="startup-catchup").start()
     yield
     scheduler.shutdown(wait=False)
     print("[scheduler] APScheduler stopped")
