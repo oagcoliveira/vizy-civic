@@ -86,14 +86,14 @@ Responda APENAS em JSON com as chaves: summary, keywords (array), policy_tags (a
 
 def generate_politician_bio(name: str, party: str, state: str, office: str, committees: list[str]) -> str:
     """Returns a 3-sentence AI biography for a politician."""
-    committees_str = ", ".join(committees) if committees else "nenhuma comissão registrada"
+    committees_str = ", ".join(committees) if committees else "nenhum comitê registrado"
     prompt = f"""Escreva uma biografia de 3 frases em português simples sobre o(a) parlamentar brasileiro(a):
 
 Nome: {name}
 Partido: {party}
 Estado: {state}
 Cargo: {office}
-Comissões: {committees_str}
+Comitês: {committees_str}
 
 Seja factual e objetivo. Não use jargão político. Responda apenas com o texto da biografia."""
 

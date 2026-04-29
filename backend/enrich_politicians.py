@@ -64,14 +64,28 @@ def fetch_batch(conn, limit: int) -> list[dict]:
     return [dict(r._mapping) for r in rows]
 
 
+def committee_display_name_expr(conn) -> str:
+    has_clean_name = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'core'
+              AND table_name = 'committees'
+              AND column_name = 'clean_name'
+        )
+    """)).scalar()
+    return "COALESCE(NULLIF(c.clean_name, ''), c.name)" if has_clean_name else "c.name"
+
+
 def fetch_committees(conn, politician_id: int) -> list[str]:
+    display_name_expr = committee_display_name_expr(conn)
     rows = conn.execute(
-        text("""
-            SELECT COALESCE(NULLIF(c.clean_name, ''), c.name) AS name
+        text(f"""
+            SELECT {display_name_expr} AS name
             FROM core.committee_memberships cm
             JOIN core.committees c ON c.id = cm.committee_id
             WHERE cm.politician_id = :pid
-            ORDER BY COALESCE(NULLIF(c.clean_name, ''), c.name)
+            ORDER BY {display_name_expr}
         """),
         {"pid": politician_id},
     ).fetchall()

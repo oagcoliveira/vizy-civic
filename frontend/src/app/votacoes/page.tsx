@@ -66,7 +66,7 @@ const BILL_TYPE_NAMES_PT: Record<string, string> = {
   REC:  "Recurso",
   REP:  "Requerimento de Plenário",
   SAP:  "Solicitação de Apoio",
-  CMC:  "Comissão Mista de Controle",
+  CMC:  "Comitê Misto de Controle",
   PDC:  "Projeto de Decreto do Congresso",
 };
 
@@ -83,7 +83,7 @@ const BILL_TYPE_NAMES_EN: Record<string, string> = {
   REC:  "Appeal",
   REP:  "Plenary Request",
   SAP:  "Support Request",
-  CMC:  "Joint Control Commission",
+  CMC:  "Joint Control Committee",
   PDC:  "Congressional Decree Bill",
 };
 
@@ -343,10 +343,10 @@ export default function VotacoesPage() {
           <option value="0">{t("votes.rejected")}</option>
         </select>
 
-        {/* Commission / session */}
+        {/* Committee / session */}
         <div className="flex items-center gap-1">
         <select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} className={SELECT_CLASS}>
-          <option value="">{t("votes.all_commissions")}</option>
+          <option value="">{t("votes.all_committees")}</option>
           {sessionLabels.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
@@ -354,7 +354,7 @@ export default function VotacoesPage() {
             <option value="__outros__">{t("votes.type_outros", { count: sessionOutrosCount })}</option>
           )}
         </select>
-        <AcronymHelp titleKey="votes.help_commissions" mapPt={ORGAN_NAMES_PT} mapEn={ORGAN_NAMES_EN} />
+        <AcronymHelp titleKey="votes.help_committees" mapPt={ORGAN_NAMES_PT} mapEn={ORGAN_NAMES_EN} />
         </div>
 
         {/* Bill type */}
@@ -400,7 +400,7 @@ export default function VotacoesPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("votes.col_date")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("votes.col_bill")}</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">{t("votes.col_commission")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">{t("votes.col_committee")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden md:table-cell">{t("votes.col_type")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">{t("votes.col_result")}</th>
               </tr>

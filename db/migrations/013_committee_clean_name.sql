@@ -1,11 +1,11 @@
--- Add a cleaned, human-readable commission label while preserving the API-provided name.
+-- Add a cleaned, human-readable committee label while preserving the API-provided name.
 -- Application code should display COALESCE(NULLIF(clean_name, ''), name).
 
 ALTER TABLE core.committees
     ADD COLUMN IF NOT EXISTS clean_name VARCHAR(160);
 
 COMMENT ON COLUMN core.committees.clean_name IS
-    'Concise display label for commissions/committees. Falls back to core.committees.name when NULL or blank.';
+    'Concise display label for committees. Falls back to core.committees.name when NULL or blank.';
 
 CREATE OR REPLACE FUNCTION core.clean_committee_name(raw_name TEXT, raw_acronym TEXT)
 RETURNS TEXT
@@ -17,7 +17,7 @@ DECLARE
 BEGIN
     ac := upper(nullif(trim(coalesce(raw_acronym, '')), ''));
 
-    -- Keep the most common Câmara commissions short and consistent.
+    -- Keep the most common Câmara committees short and consistent.
     label := CASE ac
         WHEN 'CAPADR' THEN 'Agricultura'
         WHEN 'CCJC' THEN 'Constituição e Justiça'

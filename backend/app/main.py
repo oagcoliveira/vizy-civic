@@ -333,7 +333,7 @@ def _build_scheduler() -> BackgroundScheduler:
     scheduler.add_job(
         lambda: _run_etl_module("camara_commissions_sync", ETL_JOBS["camara_commissions_sync"], ETL_DIR),
         CronTrigger(hour=3, minute=45, timezone=tz),
-        id="camara_commissions_sync", name="Câmara commissions sync (daily)", replace_existing=True,
+        id="camara_commissions_sync", name="Câmara committees sync (daily)", replace_existing=True,
     )
 
     # ── Daily AI enrichment jobs (04:00–04:45 BRT) ───────────────────────

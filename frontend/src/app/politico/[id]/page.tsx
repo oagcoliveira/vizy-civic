@@ -493,7 +493,7 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
             </div>
       )}
 
-      {/* Comissões */}
+      {/* Committees */}
       {activeTab === 5 && (
         committees === null ? <TabSkeleton />
           : committees.length === 0

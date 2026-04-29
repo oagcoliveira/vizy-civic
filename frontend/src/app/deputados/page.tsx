@@ -131,7 +131,7 @@ export default function DeputadosPage() {
           onChange={(e) => setCommitteeFilter(e.target.value)}
           className={`${SELECT_CLASS} w-72 max-w-full`}
         >
-          <option value="">{t("deputies.all_commissions")}</option>
+          <option value="">{t("deputies.all_committees")}</option>
           {committees.map((c) => (
             <option key={c.id} value={String(c.id)}>
               {c.acronym ? `${c.acronym} — ${c.display_name ?? c.name}` : c.display_name ?? c.name} ({c.member_count})

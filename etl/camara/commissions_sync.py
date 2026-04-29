@@ -1,5 +1,5 @@
 """
-Commissions sync ETL: fetches committee memberships for all active deputies.
+Committees sync ETL: fetches committee memberships for all active deputies.
 
 For each active politician in core.politicians (source = 'camara'):
   1. Calls GET /deputados/{external_id}/orgaos
@@ -66,7 +66,7 @@ _VERBOSE_REPLACEMENTS = (
 
 
 def clean_committee_name(raw_name: str | None, acronym: str | None) -> str | None:
-    """Return a concise, consistently capitalized commission label."""
+    """Return a concise, consistently capitalized committee label."""
     acronym_key = (acronym or "").strip().upper()
     if acronym_key in _COMMISSION_NAME_OVERRIDES:
         return _COMMISSION_NAME_OVERRIDES[acronym_key]
@@ -113,15 +113,24 @@ def clean_committee_name(raw_name: str | None, acronym: str | None) -> str | Non
 def run(limit: int | None = None):
     started_at = datetime.now(timezone.utc)
 
-    # Fetch all active deputies
+    # Fetch all active deputies and detect whether the clean-name migration is present.
     with engine.connect() as conn:
         query = "SELECT id, external_id FROM core.politicians WHERE source = 'camara' AND is_active = TRUE ORDER BY id"
         if limit:
             query += f" LIMIT {limit}"
         politicians = conn.execute(text(query)).fetchall()
+        has_clean_name = conn.execute(text("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'core'
+                  AND table_name = 'committees'
+                  AND column_name = 'clean_name'
+            )
+        """)).scalar()
 
     total = len(politicians)
-    print(f"Syncing commissions for {total} active deputies{'  (test run)' if limit else ''}...", flush=True)
+    print(f"Syncing committees for {total} active deputies{'  (test run)' if limit else ''}...", flush=True)
 
     committees_upserted = 0
     memberships_upserted = 0
@@ -153,21 +162,35 @@ def run(limit: int | None = None):
             ended_at_val = ended_at_str[:10] if ended_at_str else None
 
             with engine.begin() as conn:
-                # Upsert committee
-                committee_row = conn.execute(text("""
-                    INSERT INTO core.committees (source, external_id, acronym, name, clean_name, is_active)
-                    VALUES ('camara', :eid, :acronym, :name, :clean_name, TRUE)
-                    ON CONFLICT (source, external_id) DO UPDATE
-                        SET acronym = EXCLUDED.acronym,
-                            name = EXCLUDED.name,
-                            clean_name = EXCLUDED.clean_name
-                    RETURNING id
-                """), {
-                    "eid": committee_external_id,
-                    "acronym": acronym,
-                    "name": name,
-                    "clean_name": clean_name,
-                }).fetchone()
+                # Upsert committee. Use clean_name only after the migration exists.
+                if has_clean_name:
+                    committee_row = conn.execute(text("""
+                        INSERT INTO core.committees (source, external_id, acronym, name, clean_name, is_active)
+                        VALUES ('camara', :eid, :acronym, :name, :clean_name, TRUE)
+                        ON CONFLICT (source, external_id) DO UPDATE
+                            SET acronym = EXCLUDED.acronym,
+                                name = EXCLUDED.name,
+                                clean_name = EXCLUDED.clean_name
+                        RETURNING id
+                    """), {
+                        "eid": committee_external_id,
+                        "acronym": acronym,
+                        "name": name,
+                        "clean_name": clean_name,
+                    }).fetchone()
+                else:
+                    committee_row = conn.execute(text("""
+                        INSERT INTO core.committees (source, external_id, acronym, name, is_active)
+                        VALUES ('camara', :eid, :acronym, :name, TRUE)
+                        ON CONFLICT (source, external_id) DO UPDATE
+                            SET acronym = EXCLUDED.acronym,
+                                name = EXCLUDED.name
+                        RETURNING id
+                    """), {
+                        "eid": committee_external_id,
+                        "acronym": acronym,
+                        "name": name,
+                    }).fetchone()
 
                 if not committee_row:
                     continue

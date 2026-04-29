@@ -17,13 +17,27 @@ POLITICIAN_COLS = """
 """
 
 
+def _committee_display_name_expr(db: Session) -> str:
+    """Return a safe SQL expression for committee labels before or after clean_name migration."""
+    has_clean_name = db.execute(text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'core'
+              AND table_name = 'committees'
+              AND column_name = 'clean_name'
+        )
+    """)).scalar()
+    return "COALESCE(NULLIF(c.clean_name, ''), c.name)" if has_clean_name else "c.name"
+
+
 @router.get("/")
 def list_politicians(
     source: str | None = Query(None, description="'camara' or 'senado'"),
     state: str | None = Query(None),
     party: str | None = Query(None),
     search: str | None = Query(None),
-    committee_id: int | None = Query(None, description="Filter by active committee/commission membership"),
+    committee_id: int | None = Query(None, description="Filter by active committee membership"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, le=100),
     db: Session = Depends(get_db),
@@ -93,7 +107,8 @@ def list_committee_filters(
     source: str | None = Query("camara", description="Filter committee options by source"),
     db: Session = Depends(get_db),
 ):
-    """Returns active committees/commissions with active member counts for listing filters."""
+    """Returns active committees with active member counts for listing filters."""
+    display_name_expr = _committee_display_name_expr(db)
     where = ["c.is_active = TRUE", "p.is_active = TRUE", "(cm.ended_at IS NULL OR cm.ended_at >= CURRENT_DATE)"]
     params: dict = {}
 
@@ -105,14 +120,14 @@ def list_committee_filters(
     where_clause = " AND ".join(where)
     rows = db.execute(text(f"""
         SELECT c.id, c.acronym, c.name,
-               COALESCE(NULLIF(c.clean_name, ''), c.name) AS display_name,
+               {display_name_expr} AS display_name,
                count(DISTINCT cm.politician_id) AS member_count
         FROM core.committees c
         JOIN core.committee_memberships cm ON cm.committee_id = c.id
         JOIN core.politicians p ON p.id = cm.politician_id
         WHERE {where_clause}
-        GROUP BY c.id, c.acronym, c.name, c.clean_name
-        ORDER BY COALESCE(NULLIF(c.acronym, ''), COALESCE(NULLIF(c.clean_name, ''), c.name))
+        GROUP BY c.id, c.acronym, c.name, {display_name_expr}
+        ORDER BY COALESCE(NULLIF(c.acronym, ''), {display_name_expr})
     """), params).fetchall()
     return [dict(r._mapping) for r in rows]
 
@@ -251,9 +266,10 @@ def get_politician_speeches(
 @router.get("/{politician_id}/committees")
 def get_politician_committees(politician_id: int, db: Session = Depends(get_db)):
     """Returns active committee memberships for a politician."""
-    rows = db.execute(text("""
+    display_name_expr = _committee_display_name_expr(db)
+    rows = db.execute(text(f"""
         SELECT c.id, c.acronym, c.name,
-               COALESCE(NULLIF(c.clean_name, ''), c.name) AS display_name,
+               {display_name_expr} AS display_name,
                cm.role, cm.started_at, cm.ended_at
         FROM core.committee_memberships cm
         JOIN core.committees c ON c.id = cm.committee_id
