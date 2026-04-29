@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.auth import BillTrack, PoliticianFollow, User
+from app.services.auth_notifications import send_auth_alert
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
@@ -66,6 +67,12 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    send_auth_alert(
+        event_type="signup",
+        user_id=user.id,
+        user_email=user.email,
+        user_name=user.name,
+    )
     return {"id": user.id, "email": user.email}
 
 
@@ -77,6 +84,12 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     user.last_login_at = datetime.utcnow()
     db.commit()
     token = create_access_token({"sub": str(user.id)})
+    send_auth_alert(
+        event_type="login",
+        user_id=user.id,
+        user_email=user.email,
+        user_name=user.name,
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 
