@@ -138,6 +138,7 @@ const pt = {
   "multiselect.select_all":   "Selecionar todos",
   "multiselect.deselect_all": "Desmarcar todos",
   "multiselect.n_types":      "{n} tipos",
+  "multiselect.n_areas":      "{n} áreas",
 
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Acompanhar",
@@ -618,6 +619,7 @@ const en: Record<keyof typeof pt, string> = {
   "multiselect.select_all":   "Select all",
   "multiselect.deselect_all": "Deselect all",
   "multiselect.n_types":      "{n} types",
+  "multiselect.n_areas":      "{n} areas",
 
   // ── Bill detail ──────────────────────────────────────────────────────────────
   "bill.track":          "+ Track",

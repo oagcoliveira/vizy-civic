@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getPolicyAreaLabel } from "@/lib/policyAreas";
 import type { TranslationKey } from "@/lib/translations";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
@@ -99,7 +100,7 @@ function MultiSelect({ options, selected, onChange, placeholder, labelSelectAll,
       : allSelected
       ? placeholder
       : selected.size === 1
-      ? Array.from(selected)[0]
+      ? options.find((opt) => opt.value === Array.from(selected)[0])?.label ?? Array.from(selected)[0]
       : labelNTypes(selected.size);
 
   return (
@@ -171,7 +172,7 @@ export default function ProposicoesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(DEFAULT_SELECTED);
   const [selectedPolicyAreas, setSelectedPolicyAreas] = useState<Set<string>>(new Set());
-  const [availablePolicyAreas, setAvailablePolicyAreas] = useState<{ value: string; label: string }[]>([]);
+  const [policyAreaValues, setPolicyAreaValues] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Load available policy areas once
@@ -180,9 +181,7 @@ export default function ProposicoesPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.policy_areas) {
-          setAvailablePolicyAreas(
-            (data.policy_areas as string[]).map((a) => ({ value: a, label: a }))
-          );
+          setPolicyAreaValues(data.policy_areas as string[]);
         }
       })
       .catch(() => {});
@@ -228,6 +227,11 @@ export default function ProposicoesPage() {
     Array.from(selectedTypes).every((v) => DEFAULT_SELECTED.has(v)) &&
     selectedPolicyAreas.size === 0;
 
+  const policyAreaOptions: MultiSelectOption[] = policyAreaValues.map((area) => ({
+    value: area,
+    label: getPolicyAreaLabel(area, lang),
+  }));
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const handleClear = () => {
@@ -263,15 +267,15 @@ export default function ProposicoesPage() {
           labelDeselectAll={t("multiselect.deselect_all")}
           labelNTypes={(n) => t("multiselect.n_types", { n })}
         />
-        {availablePolicyAreas.length > 0 && (
+        {policyAreaOptions.length > 0 && (
           <MultiSelect
-            options={availablePolicyAreas}
+            options={policyAreaOptions}
             selected={selectedPolicyAreas}
             onChange={(next) => setSelectedPolicyAreas(next)}
             placeholder={t("bills.all_policy_areas")}
             labelSelectAll={t("multiselect.select_all")}
             labelDeselectAll={t("multiselect.deselect_all")}
-            labelNTypes={(n) => t("multiselect.n_types", { n })}
+            labelNTypes={(n) => t("multiselect.n_areas", { n })}
           />
         )}
         {!isDefaultFilter && (

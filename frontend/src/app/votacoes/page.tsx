@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getPolicyAreaLabel } from "@/lib/policyAreas";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 const PAGE_SIZE = 50;
@@ -162,16 +163,20 @@ function formatDate(ts: string | null) {
 }
 
 // ── Policy area multi-select ──────────────────────────────────────────────────
+type PolicyAreaOption = { value: string; label: string };
+
 function PolicyAreaSelect({
   options,
   selected,
   onChange,
   placeholder,
+  labelNAreas,
 }: {
-  options: string[];
+  options: PolicyAreaOption[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
   placeholder: string;
+  labelNAreas: (n: number) => string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -192,8 +197,8 @@ function PolicyAreaSelect({
   const summary = noneSelected || allSelected
     ? placeholder
     : selected.size === 1
-    ? Array.from(selected)[0]
-    : `${selected.size} áreas`;
+    ? options.find((opt) => opt.value === Array.from(selected)[0])?.label ?? Array.from(selected)[0]
+    : labelNAreas(selected.size);
   return (
     <div ref={ref} className="relative">
       <button
@@ -211,17 +216,17 @@ function PolicyAreaSelect({
           <div className="max-h-72 overflow-y-auto py-1">
             {options.map((opt) => (
               <div
-                key={opt}
+                key={opt.value}
                 className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-muted/50"
-                onClick={() => toggle(opt)}
+                onClick={() => toggle(opt.value)}
               >
                 <input
                   type="checkbox"
                   readOnly
-                  checked={selected.has(opt)}
+                  checked={selected.has(opt.value)}
                   className="h-4 w-4 rounded border-input accent-primary"
                 />
-                <span>{opt}</span>
+                <span>{opt.label}</span>
               </div>
             ))}
           </div>
@@ -232,7 +237,7 @@ function PolicyAreaSelect({
 }
 
 export default function VotacoesPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [items, setItems] = useState<Votacao[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -269,8 +274,8 @@ export default function VotacoesPage() {
   }
 
   function voteTypeBadge(vt: string | null) {
-    if (vt === "nominal") return <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">Nominal</Badge>;
-    if (vt === "symbolic") return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">Simbólica</Badge>;
+    if (vt === "nominal") return <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">{t("votes.type_nominal")}</Badge>;
+    if (vt === "symbolic") return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">{t("votes.type_symbolic")}</Badge>;
     return null;
   }
 
@@ -306,6 +311,11 @@ export default function VotacoesPage() {
     setSelectedPolicyAreas(new Set());
   };
 
+  const policyAreaSelectOptions: PolicyAreaOption[] = policyAreaOptions.map((area) => ({
+    value: area,
+    label: getPolicyAreaLabel(area, lang),
+  }));
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -322,8 +332,8 @@ export default function VotacoesPage() {
         {/* Vote type */}
         <select value={voteTypeFilter} onChange={(e) => setVoteTypeFilter(e.target.value)} className={SELECT_CLASS}>
           <option value="">{t("votes.all_types")}</option>
-          <option value="nominal">Nominal</option>
-          <option value="symbolic">Simbólica</option>
+          <option value="nominal">{t("votes.type_nominal")}</option>
+          <option value="symbolic">{t("votes.type_symbolic")}</option>
         </select>
 
         {/* Result */}
@@ -341,7 +351,7 @@ export default function VotacoesPage() {
             <option key={s} value={s}>{s}</option>
           ))}
           {sessionOutrosCount > 0 && (
-            <option value="__outros__">Outras ({sessionOutrosCount} votações)</option>
+            <option value="__outros__">{t("votes.type_outros", { count: sessionOutrosCount })}</option>
           )}
         </select>
         <AcronymHelp titleKey="votes.help_commissions" mapPt={ORGAN_NAMES_PT} mapEn={ORGAN_NAMES_EN} />
@@ -360,10 +370,11 @@ export default function VotacoesPage() {
         {/* Policy area multi-select */}
         {policyAreaOptions.length > 0 && (
           <PolicyAreaSelect
-            options={policyAreaOptions}
+            options={policyAreaSelectOptions}
             selected={selectedPolicyAreas}
             onChange={setSelectedPolicyAreas}
             placeholder={t("votes.all_policy_areas")}
+            labelNAreas={(n) => t("multiselect.n_areas", { n })}
           />
         )}
         {hasFilter && (
@@ -389,8 +400,8 @@ export default function VotacoesPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">{t("votes.col_date")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t("votes.col_bill")}</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">Comissão</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden md:table-cell">Tipo</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden sm:table-cell">{t("votes.col_commission")}</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24 hidden md:table-cell">{t("votes.col_type")}</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground w-28">{t("votes.col_result")}</th>
               </tr>
             </thead>
