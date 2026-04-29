@@ -40,7 +40,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
@@ -50,7 +50,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
@@ -58,14 +58,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-700 text-white py-2 rounded-lg font-semibold hover:bg-brand-900 transition disabled:opacity-60"
+            className="w-full bg-primary text-primary-foreground py-2 rounded-lg font-semibold shadow-sm hover:bg-primary/90 transition disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? t("shared.loading") : t("login.submit")}
           </button>
         </form>
         <p className="text-center text-sm text-gray-500 mt-4">
           {t("login.no_account")}{" "}
-          <Link href="/cadastro" className="text-brand-700 font-medium">
+          <Link href="/cadastro" className="text-primary font-medium hover:underline">
             {t("login.signup_link")}
           </Link>
         </p>
