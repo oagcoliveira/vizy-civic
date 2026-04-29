@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import bcrypt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,7 @@ ALGORITHM = "HS256"
 class UserCreate(BaseModel):
     email: EmailStr
     name: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
 
 
 class Token(BaseModel):

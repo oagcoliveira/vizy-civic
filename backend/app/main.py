@@ -47,7 +47,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import dotenv_values
-from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -475,6 +475,7 @@ def _run_startup_catchup():
 async def lifespan(app: FastAPI):
     scheduler = _build_scheduler()
     scheduler.start()
+    app.state.scheduler = scheduler
     print("[scheduler] APScheduler started — ETL jobs scheduled (daily cron + every-2h conditional)")
     # Run catch-up in a background thread so startup is non-blocking
     threading.Thread(target=_run_startup_catchup, daemon=True, name="startup-catchup").start()
@@ -506,6 +507,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
+
+
 app.include_router(auth.router,        prefix="/auth",       tags=["auth"])
 app.include_router(politicians.router, prefix="/politicians", tags=["politicians"])
 app.include_router(bills.router,       prefix="/bills",       tags=["bills"])
@@ -526,11 +538,16 @@ def health():
     return {"status": "ok"}
 
 
+def _require_admin_user(current_user = Depends(auth.get_current_user)):
+    """Allow only the configured admin account to run operational endpoints."""
+    if current_user.email.lower() != settings.admin_email.lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return current_user
+
+
 @app.get("/admin/schedule", tags=["admin"])
-def list_schedule(x_admin_key: str | None = Header(None)):
+def list_schedule(_admin = Depends(_require_admin_user)):
     """Return the next scheduled run time for every job."""
-    if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=403, detail="Forbidden")
     jobs = []
     for job in app.state.scheduler.get_jobs() if hasattr(app.state, "scheduler") else []:
         jobs.append({
@@ -542,21 +559,17 @@ def list_schedule(x_admin_key: str | None = Header(None)):
 
 
 @app.post("/admin/refresh", tags=["admin"])
-def manual_refresh(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
+def manual_refresh(background_tasks: BackgroundTasks, _admin = Depends(_require_admin_user)):
     """Trigger all data-ingestion ETL jobs immediately (ignores last-run time).
     AI enrichment jobs are NOT triggered here — use /admin/enrich for that."""
-    if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=403, detail="Forbidden")
     background_tasks.add_task(_force_run_ingest_etl)
     return {"status": "refresh started", "jobs": list(ETL_JOBS.keys())}
 
 
 @app.post("/admin/enrich", tags=["admin"])
-def manual_enrich(background_tasks: BackgroundTasks, x_admin_key: str | None = Header(None)):
+def manual_enrich(background_tasks: BackgroundTasks, _admin = Depends(_require_admin_user)):
     """Trigger all AI enrichment jobs immediately.
     Separate from /admin/refresh to avoid running enrichment during ingestion."""
-    if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=403, detail="Forbidden")
     background_tasks.add_task(_force_run_enrich)
     ai_jobs = list(AI_ETL_JOBS.keys()) + list(ENRICH_JOBS.keys())
     return {"status": "enrichment started", "jobs": ai_jobs}

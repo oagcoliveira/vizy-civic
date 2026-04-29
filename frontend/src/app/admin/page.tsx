@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 
 const ADMIN_EMAIL = "oagcoliveira@gmail.com";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY ?? "";
 
 type JobInfo = {
   id: string;
@@ -64,7 +63,7 @@ function ActionButton({
 }
 
 export default function AdminPage() {
-  const { user, loading } = useAuth();
+  const { user, token, loading } = useAuth();
   const router = useRouter();
 
   const [jobs, setJobs] = useState<JobInfo[]>([]);
@@ -84,11 +83,11 @@ export default function AdminPage() {
   }, [user, loading, router]);
 
   const fetchSchedule = useCallback(async () => {
-    if (!ADMIN_KEY) return;
+    if (!token) return;
     setJobsLoading(true);
     try {
       const res = await fetch(`${API}/admin/schedule`, {
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -99,7 +98,7 @@ export default function AdminPage() {
     } finally {
       setJobsLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (user?.email === ADMIN_EMAIL) {
@@ -113,7 +112,7 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API}/admin/refresh`, {
         method: "POST",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (res.ok) {
@@ -136,7 +135,7 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API}/admin/enrich`, {
         method: "POST",
-        headers: { "X-Admin-Key": ADMIN_KEY },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (res.ok) {

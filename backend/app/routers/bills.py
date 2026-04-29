@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.auth import BillTrack, User
 from app.routers.auth import get_current_user
@@ -501,9 +502,12 @@ def enrich_bill(
       3. AI bill        — short_title, summary, policy_area (Claude Haiku)
       4. AI events      — plain-language event summaries  (Claude Haiku)
 
-    Any authenticated user may trigger this.
+    Only the configured admin user may trigger this because it can run ETL work and paid AI calls.
     Returns 409 if the bill is already fully enriched.
     """
+    if current_user.email.lower() != settings.admin_email.lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
     # Verify the bill exists and is a Câmara bill
     row = db.execute(text("""
         SELECT id, source, status, short_title, policy_area, ementa, type,
