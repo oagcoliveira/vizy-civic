@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 
-const NAV_LINKS = [
+const PUBLIC_NAV_LINKS = [
   { href: "/deputados", key: "nav.deputies" },
   { href: "/proposicoes", key: "nav.bills" },
   { href: "/votacoes", key: "nav.votes" },
@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/partidos", key: "nav.parties" },
   { href: "/busca", key: "nav.search" },
   { href: "/digest", key: "nav.digest" },
+  { href: "/feed", key: "nav.feed", authOnly: true },
 ] as const;
 
 export function Navbar() {
@@ -29,7 +30,7 @@ export function Navbar() {
             Vizy
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            {NAV_LINKS.map(({ href, key }) => (
+            {PUBLIC_NAV_LINKS.filter(l => !('authOnly' in l) || user).map(({ href, key }) => (
               <Link
                 key={href}
                 href={href}
@@ -63,9 +64,6 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <Link href="/feed" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                  {t("nav.feed")}
-                </Link>
                 {user.email === "oagcoliveira@gmail.com" && (
                   <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5">
                     Admin
@@ -114,7 +112,7 @@ export function Navbar() {
       {mobileOpen && (
         <div className="md:hidden border-t bg-white px-4 py-4 flex flex-col gap-4">
           <nav className="flex flex-col gap-3 text-sm font-medium text-muted-foreground">
-            {NAV_LINKS.map(({ href, key }) => (
+            {PUBLIC_NAV_LINKS.filter(l => !('authOnly' in l) || user).map(({ href, key }) => (
               <Link
                 key={href}
                 href={href}
@@ -129,9 +127,6 @@ export function Navbar() {
           <div className="border-t pt-3 flex flex-col gap-3 text-sm font-medium text-muted-foreground">
             {user ? (
               <>
-                <Link href="/feed" className="hover:text-foreground transition-colors" onClick={() => setMobileOpen(false)}>
-                  {t("nav.feed")}
-                </Link>
                 {user.email === "oagcoliveira@gmail.com" && (
                   <Link href="/admin" className="text-xs hover:text-foreground transition-colors border border-dashed rounded px-2 py-0.5 w-fit" onClick={() => setMobileOpen(false)}>
                     Admin

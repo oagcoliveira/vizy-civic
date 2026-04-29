@@ -10,7 +10,7 @@ const pt = {
   "nav.search":       "Busca",
   "nav.login":        "Entrar",
   "nav.signup":       "Criar conta",
-  "nav.feed":         "Meu feed",
+  "nav.feed":         "Feed",
   "nav.logout":       "Sair",
 
   // ── Home ────────────────────────────────────────────────────────────────────
@@ -491,7 +491,7 @@ const en: Record<keyof typeof pt, string> = {
   "nav.search":       "Search",
   "nav.login":        "Log in",
   "nav.signup":       "Sign up",
-  "nav.feed":         "My feed",
+  "nav.feed":         "Feed",
   "nav.logout":       "Log out",
 
   // ── Home ────────────────────────────────────────────────────────────────────
