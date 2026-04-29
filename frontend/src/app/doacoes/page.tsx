@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  AreaChart, Area, CartesianGrid, Legend,
+  CartesianGrid, Legend,
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -275,7 +275,7 @@ export default function DoacoesPage() {
         ))}
       </div>
 
-      {/* Row 2: Stacked area chart | Column party chart — same height */}
+      {/* Row 2: Stacked column chart | Column party chart — same height */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
         <div className="rounded-lg border p-5">
@@ -284,18 +284,18 @@ export default function DoacoesPage() {
             <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">{t("donations.loading")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={byYear} margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+              <BarChart data={byYear} margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="election_year" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={brl} tick={{ fontSize: 10 }} width={68} />
                 <Tooltip formatter={(v) => v != null ? brlFull(Number(v)) : ""} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {sourceKeys.map((key, i) => (
-                  <Area key={key} type="monotone" dataKey={key} stackId="a"
-                        stroke={COLORS[i % COLORS.length]}
-                        fill={COLORS[i % COLORS.length]} fillOpacity={0.65} />
+                  <Bar key={key} dataKey={key} stackId="election-total"
+                       fill={COLORS[i % COLORS.length]}
+                       radius={i === sourceKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
                 ))}
-              </AreaChart>
+              </BarChart>
             </ResponsiveContainer>
           )}
         </div>
