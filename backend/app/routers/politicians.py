@@ -23,6 +23,7 @@ def list_politicians(
     state: str | None = Query(None),
     party: str | None = Query(None),
     search: str | None = Query(None),
+    committee_id: int | None = Query(None, description="Filter by active committee/commission membership"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, le=100),
     db: Session = Depends(get_db),
@@ -42,6 +43,17 @@ def list_politicians(
     if search:
         where.append("p.short_name ILIKE :search")
         params["search"] = f"%{search}%"
+    if committee_id:
+        where.append("""
+            EXISTS (
+                SELECT 1
+                FROM core.committee_memberships cm
+                WHERE cm.politician_id = p.id
+                  AND cm.committee_id = :committee_id
+                  AND (cm.ended_at IS NULL OR cm.ended_at >= CURRENT_DATE)
+            )
+        """)
+        params["committee_id"] = committee_id
 
     where_clause = " AND ".join(where)
 
@@ -73,6 +85,33 @@ def politicians_autocomplete(db: Session = Depends(get_db)):
         WHERE p.is_active = TRUE
         ORDER BY p.short_name
     """)).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
+@router.get("/filters/committees")
+def list_committee_filters(
+    source: str | None = Query("camara", description="Filter committee options by source"),
+    db: Session = Depends(get_db),
+):
+    """Returns active committees/commissions with active member counts for listing filters."""
+    where = ["c.is_active = TRUE", "p.is_active = TRUE", "(cm.ended_at IS NULL OR cm.ended_at >= CURRENT_DATE)"]
+    params: dict = {}
+
+    if source:
+        where.append("c.source = :source")
+        where.append("p.source = :source")
+        params["source"] = source
+
+    where_clause = " AND ".join(where)
+    rows = db.execute(text(f"""
+        SELECT c.id, c.acronym, c.name, count(DISTINCT cm.politician_id) AS member_count
+        FROM core.committees c
+        JOIN core.committee_memberships cm ON cm.committee_id = c.id
+        JOIN core.politicians p ON p.id = cm.politician_id
+        WHERE {where_clause}
+        GROUP BY c.id, c.acronym, c.name
+        ORDER BY COALESCE(NULLIF(c.acronym, ''), c.name)
+    """), params).fetchall()
     return [dict(r._mapping) for r in rows]
 
 

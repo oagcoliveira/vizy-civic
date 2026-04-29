@@ -40,6 +40,7 @@ const pt = {
   "deputies.search":       "Buscar por nome...",
   "deputies.all_states":   "Todos os estados",
   "deputies.all_parties":  "Todos os partidos",
+  "deputies.all_commissions": "Todas as comissões",
   "deputies.clear":        "Limpar filtros",
   "deputies.empty":        "Nenhum deputado encontrado.",
 
@@ -519,6 +520,7 @@ const en: Record<keyof typeof pt, string> = {
   "deputies.search":       "Search by name...",
   "deputies.all_states":   "All states",
   "deputies.all_parties":  "All parties",
+  "deputies.all_commissions": "All commissions",
   "deputies.clear":        "Clear filters",
   "deputies.empty":        "No deputies found.",
 

@@ -15,6 +15,13 @@ type Politician = {
   photo_url: string | null;
 };
 
+type CommitteeOption = {
+  id: number;
+  acronym: string | null;
+  name: string;
+  member_count: number;
+};
+
 const STATES = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
   "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO",
@@ -34,12 +41,21 @@ const SELECT_CLASS =
 export default function DeputadosPage() {
   const { t } = useLanguage();
   const [politicians, setPoliticians] = useState<Politician[]>([]);
+  const [committees, setCommittees] = useState<CommitteeOption[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [partyFilter, setPartyFilter] = useState("");
+  const [committeeFilter, setCommitteeFilter] = useState("");
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/politicians/filters/committees?source=camara`)
+      .then((r) => r.json())
+      .then((data) => setCommittees(Array.isArray(data) ? data : []))
+      .catch(() => setCommittees([]));
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -50,6 +66,7 @@ export default function DeputadosPage() {
     if (search) params.set("search", search);
     if (stateFilter) params.set("state", stateFilter);
     if (partyFilter) params.set("party", partyFilter);
+    if (committeeFilter) params.set("committee_id", committeeFilter);
 
     setLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/politicians/?${params}`)
@@ -59,16 +76,17 @@ export default function DeputadosPage() {
         setTotal(data.total);
         setLoading(false);
       });
-  }, [page, search, stateFilter, partyFilter]);
+  }, [page, search, stateFilter, partyFilter, committeeFilter]);
 
-  useEffect(() => { setPage(1); }, [search, stateFilter, partyFilter]);
+  useEffect(() => { setPage(1); }, [search, stateFilter, partyFilter, committeeFilter]);
 
-  const hasFilters = search !== "" || stateFilter !== "" || partyFilter !== "";
+  const hasFilters = search !== "" || stateFilter !== "" || partyFilter !== "" || committeeFilter !== "";
 
   function clearFilters() {
     setSearch("");
     setStateFilter("");
     setPartyFilter("");
+    setCommitteeFilter("");
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -106,6 +124,18 @@ export default function DeputadosPage() {
         >
           <option value="">{t("deputies.all_parties")}</option>
           {PARTIES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select
+          value={committeeFilter}
+          onChange={(e) => setCommitteeFilter(e.target.value)}
+          className={`${SELECT_CLASS} w-72 max-w-full`}
+        >
+          <option value="">{t("deputies.all_commissions")}</option>
+          {committees.map((c) => (
+            <option key={c.id} value={String(c.id)}>
+              {c.acronym ? `${c.acronym} — ${c.name}` : c.name} ({c.member_count})
+            </option>
+          ))}
         </select>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
