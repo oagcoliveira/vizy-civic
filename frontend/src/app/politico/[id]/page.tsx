@@ -86,6 +86,7 @@ type Committee = {
   id: number;
   acronym: string | null;
   name: string | null;
+  display_name: string | null;
   role: string | null;
   started_at: string | null;
   ended_at: string | null;
@@ -501,8 +502,8 @@ export default function PoliticianPage({ params }: { params: { id: string } }) {
               {committees.map((c) => (
                 <div key={c.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{c.name ?? c.acronym ?? "—"}</p>
-                    {c.acronym && c.name && (
+                    <p className="text-sm font-medium truncate">{c.display_name ?? c.name ?? c.acronym ?? "—"}</p>
+                    {c.acronym && (c.display_name || c.name) && (
                       <p className="text-xs text-muted-foreground">{c.acronym}</p>
                     )}
                   </div>

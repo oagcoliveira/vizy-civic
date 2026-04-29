@@ -67,10 +67,11 @@ def fetch_batch(conn, limit: int) -> list[dict]:
 def fetch_committees(conn, politician_id: int) -> list[str]:
     rows = conn.execute(
         text("""
-            SELECT c.name FROM core.committee_memberships cm
+            SELECT COALESCE(NULLIF(c.clean_name, ''), c.name) AS name
+            FROM core.committee_memberships cm
             JOIN core.committees c ON c.id = cm.committee_id
             WHERE cm.politician_id = :pid
-            ORDER BY c.name
+            ORDER BY COALESCE(NULLIF(c.clean_name, ''), c.name)
         """),
         {"pid": politician_id},
     ).fetchall()

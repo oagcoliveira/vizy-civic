@@ -21,6 +21,94 @@ from camara.client import get
 
 JOB_NAME = "camara_commissions_sync"
 
+_COMMISSION_NAME_OVERRIDES = {
+    "CAPADR": "Agricultura",
+    "CCJC": "Constituição e Justiça",
+    "CCTI": "Ciência, Tecnologia e Inovação",
+    "CCOM": "Comunicação",
+    "CDC": "Defesa do Consumidor",
+    "CDE": "Desenvolvimento Econômico",
+    "CDU": "Desenvolvimento Urbano",
+    "CE": "Educação",
+    "CESPO": "Esporte",
+    "CFT": "Finanças e Tributação",
+    "CFFC": "Fiscalização e Controle",
+    "CMADS": "Meio Ambiente",
+    "CME": "Minas e Energia",
+    "CREDN": "Relações Exteriores e Defesa",
+    "CSPCCO": "Segurança Pública",
+    "CSSF": "Saúde",
+    "CTASP": "Trabalho e Serviço Público",
+    "CVT": "Viação e Transportes",
+    "CLP": "Legislação Participativa",
+    "CPD": "Pessoas com Deficiência",
+    "CMULHER": "Direitos da Mulher",
+    "CIDOSO": "Pessoa Idosa",
+    "CPOVOS": "Amazônia e Povos Originários",
+    "CINDRE": "Integração Nacional",
+    "CCULT": "Cultura",
+}
+
+_SMALL_WORDS = {"a", "à", "ao", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "para"}
+
+_VERBOSE_REPLACEMENTS = (
+    ("Agricultura, Pecuária, Abastecimento e Desenvolvimento Rural", "Agricultura"),
+    ("Fiscalização Financeira e Controle", "Fiscalização e Controle"),
+    ("Segurança Pública e Combate ao Crime Organizado", "Segurança Pública"),
+    ("Relações Exteriores e de Defesa Nacional", "Relações Exteriores e Defesa"),
+    ("Trabalho, de Administração e Serviço Público", "Trabalho e Serviço Público"),
+    ("Defesa dos Direitos das Pessoas com Deficiência", "Pessoas com Deficiência"),
+    ("Defesa dos Direitos da Mulher", "Direitos da Mulher"),
+    ("Defesa dos Direitos da Pessoa Idosa", "Pessoa Idosa"),
+    ("Amazônia e dos Povos Originários e Tradicionais", "Amazônia e Povos Originários"),
+    ("Integração Nacional e Desenvolvimento Regional", "Integração Nacional"),
+)
+
+
+def clean_committee_name(raw_name: str | None, acronym: str | None) -> str | None:
+    """Return a concise, consistently capitalized commission label."""
+    acronym_key = (acronym or "").strip().upper()
+    if acronym_key in _COMMISSION_NAME_OVERRIDES:
+        return _COMMISSION_NAME_OVERRIDES[acronym_key]
+
+    if not raw_name:
+        return None
+
+    label = " ".join(raw_name.split())
+    for prefix in (
+        "Comissão Permanente ",
+        "Comissão de ",
+        "Comissão da ",
+        "Comissão do ",
+        "Comissão das ",
+        "Comissão dos ",
+        "Comissão ",
+    ):
+        if label.lower().startswith(prefix.lower()):
+            label = label[len(prefix):]
+            break
+
+    special_prefixes = (
+        "Especial destinada a ",
+        "Especial destinada ao ",
+        "Especial destinada à ",
+    )
+    for prefix in special_prefixes:
+        if label.lower().startswith(prefix.lower()):
+            label = "Especial: " + label[len(prefix):]
+            break
+
+    for old, new in _VERBOSE_REPLACEMENTS:
+        label = label.replace(old, new)
+
+    words = label.lower().split()
+    label = " ".join(
+        word if i > 0 and word in _SMALL_WORDS else word[:1].upper() + word[1:]
+        for i, word in enumerate(words)
+    )
+
+    return (label[:87].rstrip() + "...") if len(label) > 90 else (label or None)
+
 
 def run(limit: int | None = None):
     started_at = datetime.now(timezone.utc)
@@ -55,6 +143,7 @@ def run(limit: int | None = None):
 
             acronym = (orgao.get("siglaOrgao") or "")[:50] or None
             name = (orgao.get("nomePublicacao") or orgao.get("nomeOrgao") or "")[:500] or None
+            clean_name = clean_committee_name(name, acronym)
             role = (orgao.get("titulo") or "")[:100] or None
 
             # Parse dates
@@ -66,16 +155,18 @@ def run(limit: int | None = None):
             with engine.begin() as conn:
                 # Upsert committee
                 committee_row = conn.execute(text("""
-                    INSERT INTO core.committees (source, external_id, acronym, name, is_active)
-                    VALUES ('camara', :eid, :acronym, :name, TRUE)
+                    INSERT INTO core.committees (source, external_id, acronym, name, clean_name, is_active)
+                    VALUES ('camara', :eid, :acronym, :name, :clean_name, TRUE)
                     ON CONFLICT (source, external_id) DO UPDATE
                         SET acronym = EXCLUDED.acronym,
-                            name = EXCLUDED.name
+                            name = EXCLUDED.name,
+                            clean_name = EXCLUDED.clean_name
                     RETURNING id
                 """), {
                     "eid": committee_external_id,
                     "acronym": acronym,
                     "name": name,
+                    "clean_name": clean_name,
                 }).fetchone()
 
                 if not committee_row:

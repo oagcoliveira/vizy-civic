@@ -104,13 +104,15 @@ def list_committee_filters(
 
     where_clause = " AND ".join(where)
     rows = db.execute(text(f"""
-        SELECT c.id, c.acronym, c.name, count(DISTINCT cm.politician_id) AS member_count
+        SELECT c.id, c.acronym, c.name,
+               COALESCE(NULLIF(c.clean_name, ''), c.name) AS display_name,
+               count(DISTINCT cm.politician_id) AS member_count
         FROM core.committees c
         JOIN core.committee_memberships cm ON cm.committee_id = c.id
         JOIN core.politicians p ON p.id = cm.politician_id
         WHERE {where_clause}
-        GROUP BY c.id, c.acronym, c.name
-        ORDER BY COALESCE(NULLIF(c.acronym, ''), c.name)
+        GROUP BY c.id, c.acronym, c.name, c.clean_name
+        ORDER BY COALESCE(NULLIF(c.acronym, ''), COALESCE(NULLIF(c.clean_name, ''), c.name))
     """), params).fetchall()
     return [dict(r._mapping) for r in rows]
 
@@ -250,7 +252,9 @@ def get_politician_speeches(
 def get_politician_committees(politician_id: int, db: Session = Depends(get_db)):
     """Returns active committee memberships for a politician."""
     rows = db.execute(text("""
-        SELECT c.id, c.acronym, c.name, cm.role, cm.started_at, cm.ended_at
+        SELECT c.id, c.acronym, c.name,
+               COALESCE(NULLIF(c.clean_name, ''), c.name) AS display_name,
+               cm.role, cm.started_at, cm.ended_at
         FROM core.committee_memberships cm
         JOIN core.committees c ON c.id = cm.committee_id
         WHERE cm.politician_id = :id

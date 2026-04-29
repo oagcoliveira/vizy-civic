@@ -19,6 +19,7 @@ type CommitteeOption = {
   id: number;
   acronym: string | null;
   name: string;
+  display_name: string | null;
   member_count: number;
 };
 
@@ -133,7 +134,7 @@ export default function DeputadosPage() {
           <option value="">{t("deputies.all_commissions")}</option>
           {committees.map((c) => (
             <option key={c.id} value={String(c.id)}>
-              {c.acronym ? `${c.acronym} — ${c.name}` : c.name} ({c.member_count})
+              {c.acronym ? `${c.acronym} — ${c.display_name ?? c.name}` : c.display_name ?? c.name} ({c.member_count})
             </option>
           ))}
         </select>
