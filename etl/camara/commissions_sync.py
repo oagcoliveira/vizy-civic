@@ -22,12 +22,23 @@ from camara.client import get
 JOB_NAME = "camara_commissions_sync"
 
 _COMMISSION_NAME_OVERRIDES = {
+    "1SECM": "1ª Secretaria",
+    "2SECM": "2ª Secretaria",
+    "3SECM": "3ª Secretaria",
+    "4SECM": "4ª Secretaria",
+    "1VIPR": "1ª Vice-Presidência",
+    "2VIPR": "2ª Vice-Presidência",
+    "BANEGRA": "Bancada Negra",
     "CAPADR": "Agricultura",
+    "CASP": "Administração e Serviço Público",
     "CCJC": "Constituição e Justiça",
+    "CCOMSOC": "Conselho de Comunicação Social",
     "CCTI": "Ciência, Tecnologia e Inovação",
     "CCOM": "Comunicação",
     "CDC": "Defesa do Consumidor",
     "CDE": "Desenvolvimento Econômico",
+    "CDHMIR": "Direitos Humanos e Igualdade Racial",
+    "CDMULHER": "Direitos da Mulher",
     "CDU": "Desenvolvimento Urbano",
     "CE": "Educação",
     "CESPO": "Esporte",

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
+import re
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +18,63 @@ POLITICIAN_COLS = """
 """
 
 
+_COMMITTEE_NAME_OVERRIDES = {
+    "1SECM": "1ª Secretaria",
+    "2SECM": "2ª Secretaria",
+    "3SECM": "3ª Secretaria",
+    "4SECM": "4ª Secretaria",
+    "1VIPR": "1ª Vice-Presidência",
+    "2VIPR": "2ª Vice-Presidência",
+    "BANEGRA": "Bancada Negra",
+    "CAPADR": "Agricultura",
+    "CASP": "Administração e Serviço Público",
+    "CCJC": "Constituição e Justiça",
+    "CCOM": "Comunicação",
+    "CCOMSOC": "Conselho de Comunicação Social",
+    "CCTI": "Ciência, Tecnologia e Inovação",
+    "CCULT": "Cultura",
+    "CDC": "Defesa do Consumidor",
+    "CDE": "Desenvolvimento Econômico",
+    "CDHMIR": "Direitos Humanos e Igualdade Racial",
+    "CDMULHER": "Direitos da Mulher",
+    "CDU": "Desenvolvimento Urbano",
+    "CE": "Educação",
+    "CESPO": "Esporte",
+    "CFT": "Finanças e Tributação",
+    "CFFC": "Fiscalização e Controle",
+    "CIDOSO": "Pessoa Idosa",
+    "CINDRE": "Integração Nacional",
+    "CLP": "Legislação Participativa",
+    "CMADS": "Meio Ambiente",
+    "CME": "Minas e Energia",
+    "CMULHER": "Direitos da Mulher",
+    "CPD": "Pessoas com Deficiência",
+    "CPOVOS": "Amazônia e Povos Originários",
+    "CREDN": "Relações Exteriores e Defesa",
+    "CSPCCO": "Segurança Pública",
+    "CSSF": "Saúde",
+    "CTASP": "Trabalho e Serviço Público",
+    "CVT": "Viação e Transportes",
+}
+
+_SMALL_WORDS = {"a", "à", "ao", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "para"}
+_VERBOSE_REPLACEMENTS = (
+    (r"Agricultura,\s*Pecu[áa]ria,\s*Abastecimento\s+e\s+Desenvolvimento\s+Rural", "Agricultura"),
+    (r"Administra[çc][aã]o\s+e\s+Servi[çc]o\s+P[úu]blico", "Administração e Serviço Público"),
+    (r"Constitui[çc][aã]o\s+e\s+Justi[çc]a\s+e\s+de\s+Cidadania", "Constituição e Justiça"),
+    (r"Direitos\s+Humanos,\s*Minorias\s+e\s+Igualdade\s+Racial", "Direitos Humanos e Igualdade Racial"),
+    (r"Fiscaliza[çc][aã]o\s+Financeira\s+e\s+Controle", "Fiscalização e Controle"),
+    (r"Seguran[çc]a\s+P[úu]blica\s+e\s+Combate\s+ao\s+Crime\s+Organizado", "Segurança Pública"),
+    (r"Rela[çc][õo]es\s+Exteriores\s+e\s+de\s+Defesa\s+Nacional", "Relações Exteriores e Defesa"),
+    (r"Trabalho,\s*de\s+Administra[çc][aã]o\s+e\s+Servi[çc]o\s+P[úu]blico", "Trabalho e Serviço Público"),
+    (r"Defesa\s+dos\s+Direitos\s+das\s+Pessoas\s+com\s+Defici[êe]ncia", "Pessoas com Deficiência"),
+    (r"Defesa\s+dos\s+Direitos\s+da\s+Mulher", "Direitos da Mulher"),
+    (r"Defesa\s+dos\s+Direitos\s+da\s+Pessoa\s+Idosa", "Pessoa Idosa"),
+    (r"Amaz[ôo]nia\s+e\s+dos\s+Povos\s+Origin[áa]rios\s+e\s+Tradicionais", "Amazônia e Povos Originários"),
+    (r"Integra[çc][aã]o\s+Nacional\s+e\s+Desenvolvimento\s+Regional", "Integração Nacional"),
+)
+
+
 def _committee_display_name_expr(db: Session) -> str:
     """Return a safe SQL expression for committee labels before or after clean_name migration."""
     has_clean_name = db.execute(text("""
@@ -29,6 +87,45 @@ def _committee_display_name_expr(db: Session) -> str:
         )
     """)).scalar()
     return "COALESCE(NULLIF(c.clean_name, ''), c.name)" if has_clean_name else "c.name"
+
+
+def _titlecase_pt(label: str) -> str:
+    words = label.lower().split()
+    return " ".join(word if i > 0 and word in _SMALL_WORDS else word[:1].upper() + word[1:] for i, word in enumerate(words))
+
+
+def _clean_committee_label(name: str | None, acronym: str | None, display_name: str | None = None) -> str | None:
+    """Clean committee labels at read time, falling back to the API name when needed."""
+    acronym_key = (acronym or "").strip().upper()
+    if acronym_key in _COMMITTEE_NAME_OVERRIDES:
+        return _COMMITTEE_NAME_OVERRIDES[acronym_key]
+
+    label = " ".join((display_name or name or "").split())
+    if not label:
+        return None
+
+    for prefix in ("Comissão Permanente ", "Comissão de ", "Comissão da ", "Comissão do ", "Comissão das ", "Comissão dos ", "Comissão "):
+        if label.lower().startswith(prefix.lower()):
+            label = label[len(prefix):]
+            break
+
+    for prefix in ("Especial destinada a ", "Especial destinada ao ", "Especial destinada à "):
+        if label.lower().startswith(prefix.lower()):
+            label = "Especial: " + label[len(prefix):]
+            break
+
+    for pattern, replacement in _VERBOSE_REPLACEMENTS:
+        label = re.sub(pattern, replacement, label, flags=re.IGNORECASE)
+
+    label = _titlecase_pt(label)
+    return (label[:87].rstrip() + "...") if len(label) > 90 else (label or None)
+
+
+def _normalize_committee_rows(rows) -> list[dict]:
+    items = [dict(r._mapping) for r in rows]
+    for item in items:
+        item["display_name"] = _clean_committee_label(item.get("name"), item.get("acronym"), item.get("display_name")) or item.get("display_name") or item.get("name")
+    return items
 
 
 @router.get("/")
@@ -129,7 +226,7 @@ def list_committee_filters(
         GROUP BY c.id, c.acronym, c.name, {display_name_expr}
         ORDER BY COALESCE(NULLIF(c.acronym, ''), {display_name_expr})
     """), params).fetchall()
-    return [dict(r._mapping) for r in rows]
+    return _normalize_committee_rows(rows)
 
 
 @router.get("/{politician_id}")
@@ -276,7 +373,7 @@ def get_politician_committees(politician_id: int, db: Session = Depends(get_db))
         WHERE cm.politician_id = :id
         ORDER BY cm.ended_at IS NOT NULL, cm.started_at DESC NULLS LAST
     """), {"id": politician_id}).fetchall()
-    return [dict(r._mapping) for r in rows]
+    return _normalize_committee_rows(rows)
 
 
 @router.get("/{politician_id}/follow")

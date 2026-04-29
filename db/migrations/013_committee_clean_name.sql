@@ -19,12 +19,23 @@ BEGIN
 
     -- Keep the most common Câmara committees short and consistent.
     label := CASE ac
+        WHEN '1SECM' THEN '1ª Secretaria'
+        WHEN '2SECM' THEN '2ª Secretaria'
+        WHEN '3SECM' THEN '3ª Secretaria'
+        WHEN '4SECM' THEN '4ª Secretaria'
+        WHEN '1VIPR' THEN '1ª Vice-Presidência'
+        WHEN '2VIPR' THEN '2ª Vice-Presidência'
+        WHEN 'BANEGRA' THEN 'Bancada Negra'
         WHEN 'CAPADR' THEN 'Agricultura'
+        WHEN 'CASP' THEN 'Administração e Serviço Público'
         WHEN 'CCJC' THEN 'Constituição e Justiça'
+        WHEN 'CCOMSOC' THEN 'Conselho de Comunicação Social'
         WHEN 'CCTI' THEN 'Ciência, Tecnologia e Inovação'
         WHEN 'CCOM' THEN 'Comunicação'
         WHEN 'CDC' THEN 'Defesa do Consumidor'
         WHEN 'CDE' THEN 'Desenvolvimento Econômico'
+        WHEN 'CDHMIR' THEN 'Direitos Humanos e Igualdade Racial'
+        WHEN 'CDMULHER' THEN 'Direitos da Mulher'
         WHEN 'CDU' THEN 'Desenvolvimento Urbano'
         WHEN 'CE' THEN 'Educação'
         WHEN 'CESPO' THEN 'Esporte'
@@ -60,6 +71,9 @@ BEGIN
 
         -- Shorten frequent verbose official names.
         label := regexp_replace(label, 'Agricultura,\s*Pecu[áa]ria,\s*Abastecimento\s+e\s+Desenvolvimento\s+Rural', 'Agricultura', 'i');
+        label := regexp_replace(label, 'Administra[çc][aã]o\s+e\s+Servi[çc]o\s+P[úu]blico', 'Administração e Serviço Público', 'i');
+        label := regexp_replace(label, 'Constitui[çc][aã]o\s+e\s+Justi[çc]a\s+e\s+de\s+Cidadania', 'Constituição e Justiça', 'i');
+        label := regexp_replace(label, 'Direitos\s+Humanos,\s*Minorias\s+e\s+Igualdade\s+Racial', 'Direitos Humanos e Igualdade Racial', 'i');
         label := regexp_replace(label, 'Fiscaliza[çc][aã]o\s+Financeira\s+e\s+Controle', 'Fiscalização e Controle', 'i');
         label := regexp_replace(label, 'Seguran[çc]a\s+P[úu]blica\s+e\s+Combate\s+ao\s+Crime\s+Organizado', 'Segurança Pública', 'i');
         label := regexp_replace(label, 'Rela[çc][õo]es\s+Exteriores\s+e\s+de\s+Defesa\s+Nacional', 'Relações Exteriores e Defesa', 'i');
