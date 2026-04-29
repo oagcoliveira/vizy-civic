@@ -237,7 +237,7 @@ export default function VotacoesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [resultFilter, setResultFilter] = useState("");
-  const [voteTypeFilter, setVoteTypeFilter] = useState("");
+  const [voteTypeFilter, setVoteTypeFilter] = useState("nominal");
   const [sessionFilter, setSessionFilter] = useState("");
   const [billTypeFilter, setBillTypeFilter] = useState("");
   const [sessionLabels, setSessionLabels] = useState<string[]>([]);
@@ -299,9 +299,9 @@ export default function VotacoesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => { setPage(1); }, [resultFilter, voteTypeFilter, sessionFilter, billTypeFilter, selectedPolicyAreas]);
 
-  const hasFilter = resultFilter || voteTypeFilter || sessionFilter || billTypeFilter || selectedPolicyAreas.size > 0;
+  const hasFilter = resultFilter || voteTypeFilter !== "nominal" || sessionFilter || billTypeFilter || selectedPolicyAreas.size > 0;
   const clearAll = () => {
-    setResultFilter(""); setVoteTypeFilter("");
+    setResultFilter(""); setVoteTypeFilter("nominal");
     setSessionFilter(""); setBillTypeFilter("");
     setSelectedPolicyAreas(new Set());
   };
